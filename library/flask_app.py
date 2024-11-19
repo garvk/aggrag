@@ -1,3 +1,4 @@
+import requests
 import shutil
 import json, os, sys, asyncio, time, re, unicodedata
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ from library.aggrag.core.schema import (
     TableBaseRagSetting,
 )
 from library.aggrag.core.utils import zip_directory
+from library.aggrag.core.config import settings
 from library.providers.dalai import call_dalai
 from library.providers import ProviderRegistry
 import requests as py_requests
@@ -417,6 +419,27 @@ def index():
     )
 
     return html_str
+
+
+# Add this route to proxy requests to Express server
+@app.route("/app/run", methods=["POST"])
+def proxy_express_run():
+    """
+    This is a proxy endpoint that passes all the request to Express Server running internally on port 3001;
+    """
+    try:
+        # Forward the request to Express server
+        url = f"http://localhost:{settings.PORT_EXPRESS}"
+        response = requests.post(
+            f"{url}/app/run",
+            json=request.get_json(),
+            headers={
+                "Content-Type": "application/json"
+            }
+        )
+        return response.json(), response.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/app/executepy", methods=["POST"])

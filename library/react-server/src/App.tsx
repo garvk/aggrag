@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useContext,
 } from "react";
+
 import Joyride, { CallBackProps, Placement, STATUS, Step } from "react-joyride";
 import ReactFlow, {
   Controls,
@@ -43,8 +44,9 @@ import {
   IconArrowsSplit,
   IconForms,
   IconAbacus,
-  IconCheck,
-  IconX,
+  IconPlayerPlay,
+  // IconCheck,
+  // IconX,
 } from "@tabler/icons-react";
 import { useNotification } from "./Notification";
 import RemoveEdge from "./RemoveEdge";
@@ -93,6 +95,8 @@ import {
   FLASK_BASE_URL,
   APP_IS_RUNNING_LOCALLY,
   browserTabIsActive,
+  baseUrl,
+  PORT_EXPRESS,
 } from "./backend/utils";
 import { Dict, JSONCompatible, LLMSpec } from "./backend/typing";
 import {
@@ -274,6 +278,7 @@ const App = () => {
     triggerHint,
     setTriggerHint,
   } = useStore(selector, shallow);
+  const [isFlowRunning, setIsFlowRunning] = useState(false);
 
   const { showNotification } = useNotification();
   const [isUseCaseCreated, setIsUseCaseCreated] = useState<any>();
@@ -729,6 +734,59 @@ const App = () => {
 
   const handleSaveAndCommit = () => {
     handleSaveFlow(true);
+  };
+
+  const handleRunFlow = async () => {
+    if (!rfInstance) return;
+
+    try {
+      setIsFlowRunning(true);
+
+      // Get current flow data
+      const flow = rfInstance.toObject();
+
+      // Call the backend API to run the flow
+      const response = await fetch(`${FLASK_BASE_URL}/app/run`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+        body: JSON.stringify({ flow }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Flow execution failed");
+      }
+
+      // Handle successful execution
+      showNotification(
+        "Success",
+        "Flow execution completed successfully!",
+        "green",
+      );
+
+      // Update node states with results
+      // This will be implemented as we add node execution handlers
+      updateNodesWithResults(data.results);
+    } catch (error) {
+      console.error("Flow execution error:", error);
+      showNotification(
+        "Error",
+        error instanceof Error ? error.message : "Flow execution failed",
+        "red",
+      );
+    } finally {
+      setIsFlowRunning(false);
+    }
+  };
+
+  const updateNodesWithResults = (results: Record<string, any>) => {
+    // This will be implemented as we add node execution handlers
+    // It will update the UI state of nodes with their execution results
+    console.log("Execution results:", results);
   };
 
   const handleSaveFlow = (
@@ -3466,6 +3524,24 @@ const App = () => {
                 }
               >
                 Import
+              </Button>
+              <Button
+                className="run-btn"
+                size="sm"
+                variant="filled"
+                compact
+                color="green"
+                mr="xs"
+                style={{ float: "left" }}
+                onClick={handleRunFlow}
+                disabled={isFlowRunning || !rfInstance}
+              >
+                {isFlowRunning ? (
+                  <Loader size="xs" color="white" mr="4px" />
+                ) : (
+                  <IconPlayerPlay size="16px" />
+                )}
+                {isFlowRunning ? "Running..." : "Run Flow"}
               </Button>
               <Menu
                 transitionProps={{ transition: "pop-top-left" }}

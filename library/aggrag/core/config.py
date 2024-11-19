@@ -148,7 +148,7 @@ class Settings(BaseSettings):
     """
     Settings for the application, loading configuration from environment variables and providing default values.
     """
-    
+    PORT_EXPRESS: Optional[int] = 3001 # Port where express server should be running; its only internal
     TOGETHER_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_API_VERSION: str = '2024-02-15-preview'

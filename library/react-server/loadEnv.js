@@ -12,8 +12,14 @@ if (result.error) {
 }
 
 const apiUrl = result.parsed.REACT_APP_API_URL;
+const port_express = result.parsed.PORT_EXPRESS;
 
-const envFileContent = `REACT_APP_API_URL=${apiUrl}`;
+// const envFileContent = `REACT_APP_API_URL=${apiUrl}`;
+// Create env content with multiple variables
+const envFileContent = [
+  `REACT_APP_API_URL=${apiUrl}`,
+  `PORT_EXPRESS=${port_express}`,
+].join("\n");
 
 // Write to .env.local
 fs.writeFileSync(path.resolve(__dirname, ".env"), envFileContent);
