@@ -15,7 +15,7 @@ router.post("/app/run", async (req, res) => {
   console.log("[/app/run] Received flow execution request");
   try {
     const { flow } = req.body;
-
+    console.log(`[/app/run] Flow execution request received with flow:`, flow);
     // Validate flow structure
     if (!flow || !flow.nodes || !flow.edges) {
       return res.status(400).json({ error: "Invalid flow structure" });
