@@ -486,6 +486,7 @@ export interface StoreHandles {
   duplicateNode: (id: string, offset?: { x?: number; y?: number }) => Node;
   setNodes: (newnodes: Node[]) => void;
   setEdges: (newedges: Edge[]) => void;
+  updateEdge: (id: string, data: Dict) => void;
   removeEdge: (id: string) => void;
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
@@ -970,6 +971,23 @@ const useStore = create<StoreHandles>((set, get) => ({
       edges: newedges,
     });
   },
+  // Add to the store implementation
+updateEdge: (id: string, data: Dict) => {
+  set({
+    edges: get().edges.map(edge => {
+      if (edge.id === id) {
+        return {
+          ...edge,
+          data: {
+            ...edge.data,
+            ...data
+          }
+        };
+      }
+      return edge;
+    })
+  });
+},
   removeEdge: (id) => {
     set({
       edges: applyEdgeChanges([{ id, type: "remove" }], get().edges),
@@ -1013,6 +1031,7 @@ const useStore = create<StoreHandles>((set, get) => ({
     connection.interactionWidth = 40;
     connection.markerEnd = { type: MarkerType.Arrow, width: 22, height: 22 }; // 22px
     connection.type = "default";
+    connection.data = { colored: false }; // Initialize data
 
     set({
       edges: addEdge(connection, get().edges), // get().edges.concat(connection)

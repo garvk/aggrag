@@ -27,6 +27,9 @@ export interface CustomEdgeProps {
   targetPosition: Position;
   style: Dict;
   markerEnd?: string;
+  data?: {
+    colored?: boolean;
+  };
 }
 
 export default function CustomEdge({
@@ -39,6 +42,7 @@ export default function CustomEdge({
   targetPosition,
   style = {},
   markerEnd,
+  data
 }: CustomEdgeProps) {
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
@@ -51,6 +55,7 @@ export default function CustomEdge({
 
   const [hovering, setHovering] = useState(false);
   const removeEdge = useStore((state) => state.removeEdge);
+  const updateEdge = useStore((state) => state.updateEdge);
 
   const onEdgeClick = (
     evt: React.MouseEvent<HTMLButtonElement>,
@@ -60,17 +65,35 @@ export default function CustomEdge({
     removeEdge(id);
   };
 
+  const onPathClick = (evt: React.MouseEvent) => {
+    evt.stopPropagation();
+    updateEdge(id, { colored: !data?.colored });
+  };
+
+  const edgeColor = data?.colored ? "#47fc0a" : (hovering ? "#000" : "#999");
   // Thanks in part to oshanley https://github.com/wbkd/react-flow/issues/1211#issuecomment-1585032930
   return (
     <EdgePathContainer
       onPointerEnter={() => setHovering(true)}
       onPointerLeave={() => setHovering(false)}
     >
-      <BaseEdge
+      <path
+        className="react-flow__edge-path"
+        d={edgePath}
+        strokeWidth={style.strokeWidth || 5}
+        stroke={edgeColor}
+        // markerEnd={markerEnd}
+        fill="none"
+        onClick={onPathClick}
+        style={{ cursor: 'pointer' }}
+        // style={{ ...style, stroke: edgeColor ? "#000" : "#999" }}
+      />
+      {/* <BaseEdge
         path={edgePath}
         markerEnd={markerEnd}
-        style={{ ...style, stroke: hovering ? "#000" : "#999" }}
-      />
+        style={{ ...style, stroke: edgeColor ? "#000" : "#999" }}
+        // onClick={onPathClick}
+      /> */}
       <EdgeLabelRenderer>
         <div
           style={{
