@@ -3530,9 +3530,16 @@ const App = () => {
                 size="sm"
                 variant="filled"
                 compact
-                color="green"
+                // color="green"
                 mr="xs"
-                style={{ float: "left" }}
+                style={{ 
+                  float: "left",
+                  backgroundColor: "#198c8a",
+                  // '&:hover': {
+                  //   backgroundColor: "#3dd409"
+                  // }
+                }}
+                // style={{ float: "left" }}
                 onClick={handleRunFlow}
                 disabled={isFlowRunning || !rfInstance}
               >
