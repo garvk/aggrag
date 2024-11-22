@@ -1,3 +1,39 @@
+/**
+ * ColoredFlowExecutor Class
+ * 
+ * This class is designed to execute nodes in a flow graph where edges are marked as "colored" to indicate special processing paths.
+ * It supports parallel execution of nodes where dependencies allow. This is particularly useful for complex workflows where
+ * certain tasks can be performed concurrently, improving efficiency and execution time.
+ *
+ * Key functionalities:
+ * - Separates colored and regular edges during initialization.
+ * - Identifies entry and output nodes based on the presence of incoming and outgoing edges.
+ * - Executes nodes in topological order based on their dependencies, grouped by levels for parallel execution.
+ *
+ * Usage:
+ * The executor requires a `Flow` object containing nodes and edges on initialization. Nodes will be executed based on the
+ * colored edges that define their execution dependencies. Regular edges are ignored for execution order but can be used
+ * for other purposes such as data validation or additional side effects in a regular flow context.
+ *
+ * Example:
+ * ```
+ * const flow = { nodes: [...], edges: [...] };
+ * const executor = new ColoredFlowExecutor(flow);
+ * executor.execute().then(context => {
+ *   console.log("Execution context:", context);
+ * });
+ * ```
+ *
+ * Implementation Details:
+ * - `executeNode`: Handles the execution of a single node (see lines 75-89).
+ * - `execute`: Orchestrates the overall execution, managing parallelism where applicable (see lines 109-132).
+ * - `determineExecutionOrder`: Determines the order of execution, organizing nodes into levels for parallel processing (see lines 186-227).
+ *
+ * Note: This is an experimental feature and may not fully support all types of graph structures, especially those with complex cyclic dependencies.
+ * 
+ * Therefore, ensure you 'Validate' the flow with 'Validate Flow' CTA inside 'Run Flow' CTA.
+ */
+
 // Currently coloredFlowExecutor wont handle parallel flows. Plus its an experimental feature
 interface Edge {
   id: string;
@@ -106,25 +142,51 @@ export class ColoredFlowExecutor {
     }
   }
 
+  // For parallel flow;
   public async execute(): Promise<Map<string, any>> {
     console.log("Determining execution order...");
-    const executionOrder = this.determineExecutionOrder();
-    console.log("Execution order determined:", executionOrder);
+    const executionLevels = this.determineExecutionOrder();
+    console.log("Execution levels determined:", executionLevels);
 
-    console.log("Starting execution of flow.");
     const executionContext = new Map<string, any>();
     const visited = new Set<string>();
 
-    // Execute nodes in the determined order
-    for (const nodeId of executionOrder) {
-      if (!visited.has(nodeId)) {
-        await this.executeColoredFlow(nodeId, executionContext, visited);
-      }
+    // Execute nodes level by level
+    for (const level of executionLevels) {
+      // Execute all nodes in current level in parallel
+      await Promise.all(
+        level.map((nodeId) =>
+          this.executeNode(nodeId, executionContext).then(() =>
+            visited.add(nodeId),
+          ),
+        ),
+      );
     }
 
     console.log("Execution of flow completed.");
     return executionContext;
   }
+
+  // For single flow; not for parallel flow
+  //   public async execute(): Promise<Map<string, any>> {
+  //     console.log("Determining execution order...");
+  //     const executionOrder = this.determineExecutionOrder();
+  //     console.log("Execution order determined:", executionOrder);
+
+  //     console.log("Starting execution of flow.");
+  //     const executionContext = new Map<string, any>();
+  //     const visited = new Set<string>();
+
+  //     // Execute nodes in the determined order
+  //     for (const nodeId of executionOrder) {
+  //       if (!visited.has(nodeId)) {
+  //         await this.executeColoredFlow(nodeId, executionContext, visited);
+  //       }
+  //     }
+
+  //     console.log("Execution of flow completed.");
+  //     return executionContext;
+  //   }
 
   private async executeColoredFlow(
     currentNodeId: string,
@@ -146,18 +208,18 @@ export class ColoredFlowExecutor {
     }
   }
 
-  private determineExecutionOrder(): string[] {
+  // For parallel flow
+  private determineExecutionOrder(): string[][] {
     const connectedNodes = this.getConnectedNodes();
     const inDegree = new Map<string, number>();
-    const zeroInDegreeQueue: string[] = [];
-    const sortedOrder: string[] = [];
+    const levelGroups: string[][] = [];
 
-    // Initialize inDegree map only for connected nodes
+    // Initialize inDegree map
     connectedNodes.forEach((nodeId) => {
       inDegree.set(nodeId, 0);
     });
 
-    // Calculate inDegree for each connected node
+    // Calculate inDegree for each node
     this.coloredEdges.forEach((edges) => {
       edges.forEach((edge) => {
         if (connectedNodes.has(edge.target)) {
@@ -166,93 +228,98 @@ export class ColoredFlowExecutor {
       });
     });
 
-    // Find entry points (nodes with no incoming colored edges)
-    inDegree.forEach((degree, nodeId) => {
-      if (degree === 0 && this.coloredEdges.has(nodeId)) {
-        zeroInDegreeQueue.push(nodeId);
+    // Group nodes by levels (nodes in same level can be executed in parallel)
+    while (inDegree.size > 0) {
+      const currentLevel: string[] = [];
+
+      // Find all nodes with zero in-degree
+      inDegree.forEach((degree, nodeId) => {
+        if (degree === 0) {
+          currentLevel.push(nodeId);
+        }
+      });
+
+      if (currentLevel.length === 0 && inDegree.size > 0) {
+        throw new Error("Cycle detected in the graph");
       }
-    });
 
-    // If no entry points found among nodes with outgoing edges,
-    // look for isolated entry nodes
-    if (zeroInDegreeQueue.length === 0) {
-      connectedNodes.forEach((nodeId) => {
-        if (inDegree.get(nodeId) === 0) {
-          zeroInDegreeQueue.push(nodeId);
-        }
-      });
-    }
-
-    // Process nodes in topological order
-    while (zeroInDegreeQueue.length > 0) {
-      const nodeId = zeroInDegreeQueue.shift()!;
-      sortedOrder.push(nodeId);
-
-      const edges = this.coloredEdges.get(nodeId) || [];
-      edges.forEach((edge) => {
-        if (connectedNodes.has(edge.target)) {
-          const newDegree = inDegree.get(edge.target)! - 1;
-          inDegree.set(edge.target, newDegree);
-          if (newDegree === 0) {
-            zeroInDegreeQueue.push(edge.target);
+      // Remove processed nodes and update in-degrees
+      currentLevel.forEach((nodeId) => {
+        inDegree.delete(nodeId);
+        const edges = this.coloredEdges.get(nodeId) || [];
+        edges.forEach((edge) => {
+          if (inDegree.has(edge.target)) {
+            inDegree.set(edge.target, inDegree.get(edge.target)! - 1);
           }
-        }
+        });
       });
+
+      if (currentLevel.length > 0) {
+        levelGroups.push(currentLevel);
+      }
     }
 
-    // Validate that all connected nodes are included
-    if (sortedOrder.length !== connectedNodes.size) {
-      throw new Error("Invalid graph structure: not all nodes can be reached");
-    }
-
-    return sortedOrder;
+    return levelGroups;
   }
 
+  //   # single flow working; not for parallel flow
   //   private determineExecutionOrder(): string[] {
+  //     const connectedNodes = this.getConnectedNodes();
   //     const inDegree = new Map<string, number>();
   //     const zeroInDegreeQueue: string[] = [];
   //     const sortedOrder: string[] = [];
-  //     const connectedNodes = this.getConnectedNodes();
 
-  //     // Initialize inDegree map for only nodes connected by colored edges
-  //     this.coloredEdges.forEach((edges, source) => {
-  //       if (connectedNodes.has(source)) {
-  //         inDegree.set(source, 0); // Ensure all source nodes are in the map
-  //         edges.forEach((edge) => {
-  //           if (connectedNodes.has(edge.target)) {
-  //             inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
-  //           }
-  //         });
-  //       }
+  //     // Initialize inDegree map only for connected nodes
+  //     connectedNodes.forEach((nodeId) => {
+  //       inDegree.set(nodeId, 0);
   //     });
 
-  //     // Find all nodes with zero in-degree within the subgraph of colored edges
+  //     // Calculate inDegree for each connected node
+  //     this.coloredEdges.forEach((edges) => {
+  //       edges.forEach((edge) => {
+  //         if (connectedNodes.has(edge.target)) {
+  //           inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
+  //         }
+  //       });
+  //     });
+
+  //     // Find entry points (nodes with no incoming colored edges)
   //     inDegree.forEach((degree, nodeId) => {
-  //       if (degree === 0 && connectedNodes.has(nodeId)) {
+  //       if (degree === 0 && this.coloredEdges.has(nodeId)) {
   //         zeroInDegreeQueue.push(nodeId);
   //       }
   //     });
 
-  //     // Process nodes with zero in-degree
-  //     while (zeroInDegreeQueue.length) {
+  //     // If no entry points found among nodes with outgoing edges,
+  //     // look for isolated entry nodes
+  //     if (zeroInDegreeQueue.length === 0) {
+  //       connectedNodes.forEach((nodeId) => {
+  //         if (inDegree.get(nodeId) === 0) {
+  //           zeroInDegreeQueue.push(nodeId);
+  //         }
+  //       });
+  //     }
+
+  //     // Process nodes in topological order
+  //     while (zeroInDegreeQueue.length > 0) {
   //       const nodeId = zeroInDegreeQueue.shift()!;
   //       sortedOrder.push(nodeId);
-  //       const nodeEdges = this.coloredEdges.get(nodeId) || [];
 
-  //       nodeEdges.forEach((edge) => {
+  //       const edges = this.coloredEdges.get(nodeId) || [];
+  //       edges.forEach((edge) => {
   //         if (connectedNodes.has(edge.target)) {
-  //           const targetInDegree = inDegree.get(edge.target)! - 1;
-  //           inDegree.set(edge.target, targetInDegree);
-  //           if (targetInDegree === 0) {
+  //           const newDegree = inDegree.get(edge.target)! - 1;
+  //           inDegree.set(edge.target, newDegree);
+  //           if (newDegree === 0) {
   //             zeroInDegreeQueue.push(edge.target);
   //           }
   //         }
   //       });
   //     }
 
-  //     // Check for cycle
+  //     // Validate that all connected nodes are included
   //     if (sortedOrder.length !== connectedNodes.size) {
-  //       throw new Error("Cycle detected in the graph, invalid execution order.");
+  //       throw new Error("Invalid graph structure: not all nodes can be reached");
   //     }
 
   //     return sortedOrder;
