@@ -972,22 +972,22 @@ const useStore = create<StoreHandles>((set, get) => ({
     });
   },
   // Add to the store implementation
-updateEdge: (id: string, data: Dict) => {
-  set({
-    edges: get().edges.map(edge => {
-      if (edge.id === id) {
-        return {
-          ...edge,
-          data: {
-            ...edge.data,
-            ...data
-          }
-        };
-      }
-      return edge;
-    })
-  });
-},
+  updateEdge: (id: string, data: Dict) => {
+    set({
+      edges: get().edges.map((edge) => {
+        if (edge.id === id) {
+          return {
+            ...edge,
+            data: {
+              ...edge.data,
+              ...data,
+            },
+          };
+        }
+        return edge;
+      }),
+    });
+  },
   removeEdge: (id) => {
     set({
       edges: applyEdgeChanges([{ id, type: "remove" }], get().edges),

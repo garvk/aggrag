@@ -746,7 +746,7 @@ const App = () => {
       const flow = rfInstance.toObject();
 
       // Call the backend API to run the flow
-      const response = await fetch(`${FLASK_BASE_URL}/app/run`, {
+      const response = await fetch(`${FLASK_BASE_URL}app/run`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -3532,7 +3532,7 @@ const App = () => {
                 compact
                 // color="green"
                 mr="xs"
-                style={{ 
+                style={{
                   float: "left",
                   backgroundColor: "#198c8a",
                   // '&:hover': {

@@ -70,7 +70,7 @@ export default function CustomEdge({
     updateEdge(id, { colored: !data?.colored });
   };
 
-  const edgeColor = data?.colored ? "#198c8a" : (hovering ? "#000" : "#999");
+  const edgeColor = data?.colored ? "#198c8a" : hovering ? "#000" : "#999";
 
   return (
     <EdgePathContainer
@@ -89,7 +89,7 @@ export default function CustomEdge({
         stroke="transparent"
         fill="none"
         onClick={onPathClick}
-        style={{ cursor: 'pointer' }}
+        style={{ cursor: "pointer" }}
       />
       {/* Highlight effect when colored */}
       {data?.colored && (
