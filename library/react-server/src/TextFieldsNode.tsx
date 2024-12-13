@@ -14,6 +14,7 @@ import {
   IconEyeOff,
   IconTransform,
 } from "@tabler/icons-react";
+import { nodeExecutionService } from "./services/NodeExecutionService";
 import useStore from "./store";
 import NodeLabel from "./NodeLabelComponent";
 import TemplateHooks, {
@@ -144,6 +145,31 @@ const TextFieldsNode: React.FC<TextFieldsNodeProps> = ({ data, id }) => {
       pingOutputNodes,
     ],
   );
+
+  const memoizedHandleRunClick = useCallback(() => {
+    // TextFields don't need a run click handler, but we'll provide one for consistency
+    return Promise.resolve();
+  }, []);
+
+  useEffect(() => {
+    if (!id) return;
+
+    nodeExecutionService.registerNodeRef(id, {
+      type: "textfields",
+      handleRunClick: memoizedHandleRunClick,
+      run: async () => {
+        return {
+          type: "textfields",
+          output: data.fields,
+          nodeId: id,
+        };
+      },
+    });
+
+    return () => {
+      nodeExecutionService.unregisterNodeRef(id);
+    };
+  }, [id, memoizedHandleRunClick, data.fields]);
 
   // Initialize fields (run once at init)
   useEffect(() => {

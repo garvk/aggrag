@@ -23,6 +23,7 @@ import { useDisclosure } from "@mantine/hooks";
 import { IconEraser, IconList } from "@tabler/icons-react";
 import useStore from "./store";
 import BaseNode from "./BaseNode";
+import { nodeExecutionService } from "./services/NodeExecutionService";
 import NodeLabel from "./NodeLabelComponent";
 import TemplateHooks, {
   extractBracketedSubstrings,
@@ -1469,6 +1470,48 @@ Soft failing by replacing undefined with empty strings.`,
       setRunTooltip("Error while indexing file.");
     }
   };
+
+  const memoizedHandleRunClick = useCallback(() => {
+    if (!handleRunClick) return;
+    handleRunClick();
+  }, [handleRunClick, status, promptText, id]);
+
+  // Register with NodeExecutionService
+  useEffect(() => {
+    if (!id) return;
+
+    nodeExecutionService.registerNodeRef(id, {
+      type: "prompt",
+      handleRunClick: memoizedHandleRunClick,
+      run: async () => {
+        return new Promise((resolve, reject) => {
+          try {
+            memoizedHandleRunClick();
+
+            const checkInterval = setInterval(() => {
+              if (status === Status.READY) {
+                clearInterval(checkInterval);
+                resolve({
+                  type: "prompt",
+                  output: data,
+                  nodeId: id,
+                });
+              } else if (status === Status.ERROR) {
+                clearInterval(checkInterval);
+                reject(new Error("Prompt execution failed"));
+              }
+            }, 100);
+          } catch (error) {
+            reject(error);
+          }
+        });
+      },
+    });
+
+    return () => {
+      nodeExecutionService.unregisterNodeRef(id);
+    };
+  }, [id, memoizedHandleRunClick, status, data]);
 
   // Dynamically update the textareas and position of the template hooks
   const textAreaRef = useRef<HTMLTextAreaElement | HTMLDivElement | null>(null);

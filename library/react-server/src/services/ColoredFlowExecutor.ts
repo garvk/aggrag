@@ -1,6 +1,6 @@
 /**
  * ColoredFlowExecutor Class
- * 
+ *
  * This class is designed to execute nodes in a flow graph where edges are marked as "colored" to indicate special processing paths.
  * It supports parallel execution of nodes where dependencies allow. This is particularly useful for complex workflows where
  * certain tasks can be performed concurrently, improving efficiency and execution time.
@@ -30,11 +30,14 @@
  * - `determineExecutionOrder`: Determines the order of execution, organizing nodes into levels for parallel processing (see lines 186-227).
  *
  * Note: This is an experimental feature and may not fully support all types of graph structures, especially those with complex cyclic dependencies.
- * 
+ *
  * Therefore, ensure you 'Validate' the flow with 'Validate Flow' CTA inside 'Run Flow' CTA.
  */
 
 // Currently coloredFlowExecutor wont handle parallel flows. Plus its an experimental feature
+import { nodeExecutionService } from "./NodeExecutionService";
+import { HeadlessBrowserService } from "./HeadlessBrowserService";
+
 interface Edge {
   id: string;
   source: string;
@@ -63,6 +66,7 @@ export class ColoredFlowExecutor {
   private regularEdges: Map<string, Edge[]>;
   private entryNodes: Set<string>;
   private outputNodes: Set<string>;
+  private headlessBrowser: HeadlessBrowserService;
 
   constructor(flow: Flow) {
     console.log("Initializing ColoredFlowExecutor with provided flow data.");
@@ -71,6 +75,7 @@ export class ColoredFlowExecutor {
     this.regularEdges = new Map();
     this.entryNodes = new Set();
     this.outputNodes = new Set();
+    this.headlessBrowser = new HeadlessBrowserService();
 
     // Separate colored and regular edges
     flow.edges.forEach((edge) => {
@@ -126,19 +131,40 @@ export class ColoredFlowExecutor {
 
   private async executeNodeByType(
     node: Node,
-    context: Map<string, any>,
+    executionContext: Map<string, any>,
   ): Promise<any> {
     console.log(`Executing node by type: ${node.type}`);
-    switch (node.type) {
-      case "textfields":
-        return {
-          type: "textfields",
-          output: node.data.fields,
-          nodeId: node.id,
-        };
-      // Add other node type handlers here
-      default:
-        throw new Error(`Unsupported node type: ${node.type}`);
+
+    try {
+      // Initialize browser if needed
+      await this.headlessBrowser.initialize();
+
+      // Declare variables outside switch
+      let result;
+
+      switch (node.type) {
+        case "textfields":
+          return {
+            type: "textfields",
+            output: node.data.fields,
+            nodeId: node.id,
+          };
+
+        case "prompt":
+          // Pass the execution context to handle any dependencies
+          result = await this.headlessBrowser.executePromptNode(node.id);
+          return {
+            type: "prompt",
+            output: result,
+            nodeId: node.id,
+          };
+
+        default:
+          throw new Error(`Unsupported node type: ${node.type}`);
+      }
+    } catch (error) {
+      console.error(`Error executing node ${node.id}:`, error);
+      throw error;
     }
   }
 
@@ -187,26 +213,6 @@ export class ColoredFlowExecutor {
   //     console.log("Execution of flow completed.");
   //     return executionContext;
   //   }
-
-  private async executeColoredFlow(
-    currentNodeId: string,
-    executionContext: Map<string, any>,
-    visited: Set<string>,
-  ): Promise<void> {
-    if (visited.has(currentNodeId)) return;
-
-    console.log(`Executing colored flow node ${currentNodeId}.`);
-    await this.executeNode(currentNodeId, executionContext);
-    visited.add(currentNodeId);
-
-    const coloredOutgoingEdges = this.coloredEdges.get(currentNodeId) || [];
-    for (const edge of coloredOutgoingEdges) {
-      console.log(
-        `Following colored edge from ${currentNodeId} to ${edge.target}.`,
-      );
-      await this.executeColoredFlow(edge.target, executionContext, visited);
-    }
-  }
 
   // For parallel flow
   private determineExecutionOrder(): string[][] {
@@ -324,26 +330,6 @@ export class ColoredFlowExecutor {
 
   //     return sortedOrder;
   //   }
-
-  private async executeRegularFlow(
-    currentNodeId: string,
-    executionContext: Map<string, any>,
-    visited: Set<string>,
-  ): Promise<void> {
-    if (visited.has(currentNodeId)) return;
-
-    console.log(`Executing regular flow node ${currentNodeId}.`);
-    await this.executeNode(currentNodeId, executionContext);
-    visited.add(currentNodeId);
-
-    const regularOutgoingEdges = this.regularEdges.get(currentNodeId) || [];
-    for (const edge of regularOutgoingEdges) {
-      console.log(
-        `Following regular edge from ${currentNodeId} to ${edge.target}.`,
-      );
-      await this.executeRegularFlow(edge.target, executionContext, visited);
-    }
-  }
 
   private getConnectedNodes(): Set<string> {
     const connectedNodes = new Set<string>();
