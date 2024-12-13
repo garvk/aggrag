@@ -1,6 +1,6 @@
 /**
  * ColoredFlowExecutor Class
- * 
+ *
  * This class is designed to execute nodes in a flow graph where edges are marked as "colored" to indicate special processing paths.
  * It supports parallel execution of nodes where dependencies allow. This is particularly useful for complex workflows where
  * certain tasks can be performed concurrently, improving efficiency and execution time.
@@ -30,7 +30,7 @@
  * - `determineExecutionOrder`: Determines the order of execution, organizing nodes into levels for parallel processing (see lines 186-227).
  *
  * Note: This is an experimental feature and may not fully support all types of graph structures, especially those with complex cyclic dependencies.
- * 
+ *
  * Therefore, ensure you 'Validate' the flow with 'Validate Flow' CTA inside 'Run Flow' CTA.
  */
 
