@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
-    "target": "es6",
+    "target": "es2021",
+    "lib": ["es2021", "dom", "dom.iterable"],
     "module": "commonjs",
     "outDir": "./dist",
     "rootDir": "./src",
@@ -8,8 +9,13 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node"
+    "moduleResolution": "node",
+    "allowJs": true,
+    "jsx": "react",
+    "paths": {
+      "*": ["./src/types/*"]
+    }
   },
-  "include": ["src/server.ts", "src/backend/**/*"],
-  "exclude": ["node_modules"]
+  "include": ["src/server.ts", "src/backend/**/*", "src/services/**/*"],
+  "exclude": ["node_modules", "src/**/*.tsx", "src/**/*.jsx"]
 }

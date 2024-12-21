@@ -35,6 +35,9 @@
  */
 
 // Currently coloredFlowExecutor wont handle parallel flows. Plus its an experimental feature
+import { Dict } from "../backend/typing";
+import { PromptExecutionService } from "./PromptExecutionService";
+
 interface Edge {
   id: string;
   source: string;
@@ -128,7 +131,9 @@ export class ColoredFlowExecutor {
     node: Node,
     context: Map<string, any>,
   ): Promise<any> {
-    console.log(`Executing node by type: ${node.type}`);
+    console.log(`Executing node by type: ${node.type} for id: ${node.id}`);
+    console.log(`The updated node data is:`, node.data);
+    console.log(`context is for ${node.id}`, context);
     switch (node.type) {
       case "textfields":
         return {
@@ -136,6 +141,10 @@ export class ColoredFlowExecutor {
           output: node.data.fields,
           nodeId: node.id,
         };
+
+      case "prompt":
+      case "promptNode":
+        return await this.executePromptNode(node, context);
       // Add other node type handlers here
       default:
         throw new Error(`Unsupported node type: ${node.type}`);
@@ -165,6 +174,51 @@ export class ColoredFlowExecutor {
 
     console.log("Execution of flow completed.");
     return executionContext;
+  }
+
+  // library/react-server/src/services/ColoredFlowExecutor.ts
+  private async executePromptNode(
+    node: Node,
+    context: Map<string, any>,
+  ): Promise<any> {
+    console.log("executing prompt node");
+    // Get input variables from connected nodes
+    const variables: Dict<any> = {};
+
+    // Get colored edges that target this node
+    const incomingColoredEdges = this.coloredEdges.get(node.id) || [];
+
+    // Process each incoming edge to collect variables
+    for (const edge of incomingColoredEdges) {
+      const sourceResult = context.get(edge.source);
+      if (sourceResult?.output) {
+        // Map the source output to the target handle (variable name)
+        variables[edge.targetHandle] = sourceResult.output;
+      }
+    }
+
+    const promptService = new PromptExecutionService(node.id);
+
+    try {
+      const result = await promptService.executePromptNode(
+        node.data.prompt,
+        node.data.llms || [],
+        node.data.rags || [],
+        variables,
+        node.data.apiKeys,
+      );
+      console.log("Result from prompt nodde: ", result);
+      return {
+        type: "prompt",
+        output: result.responses,
+        cache: result.cache,
+        nodeId: node.id,
+      };
+    } catch (error) {
+      // Asserting that error is of type Error
+      const message = (error as Error).message;
+      throw new Error(`Failed to execute prompt node: ${message}`);
+    }
   }
 
   // For single flow; not for parallel flow

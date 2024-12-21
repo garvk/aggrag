@@ -38,6 +38,7 @@ import {
 import { UserForcedPrematureExit } from "./errors";
 import CancelTracker from "./canceler";
 import { execPy } from "./pyodide/exec-py";
+// import { execPy } from "./pyodide/exec-py";
 
 // """ =================
 //     SETUP AND GLOBALS
