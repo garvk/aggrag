@@ -34,10 +34,12 @@ Aggrag allows you to configure LLM experiments, and take them from prototype to 
 
   1. import the repo from https://github.com/genai-apps/aggrag.git. checkout to 'develop' branch
   2. To start the UI: get into the 'react-server' directory, and run `npm install` and then `npm run start`
-  3. To start the server: get into the root aggrag directory and run: `python -m library.app serve`. Note, however:
+  3. Open a new terminal to run the python backend files(as we need to run python backend scripts and react scripts in different terminals)
+  4. To start the server: get into the root aggrag directory and run: `python -m library.app serve`. Note, however:
       - You will need to create `.env` file in the root directory. Use the `.env-sample` file as a reference.
       - run `pip install -r requirements.txt`. It is recommended to create a new virtualenv in the root directory to avoid installing packages globally. Command to create a new virtual env: `python3 -m venv venv`
 
+For deployment, however, you can use a command same or similar to: `gunicorn --workers=4 --threads=4 -b 0.0.0.0:8000 --log-file=logs/app.log --log-level=info library.wsgi:app`
 
 # Managing Dependencies
  
@@ -77,7 +79,9 @@ Aggrag library comes with a directory of RAGs that you can integrate into your a
 
 # Example use cases
 
-WIP
+Real-world case studies and sample use cases can be found in the '/examples' directory. We will continue to add more until a substantial number of use cases are covered. 
+
+You are also welcome to contribute by adding your own use cases to this directory:)
 
 ---
 

@@ -65,6 +65,9 @@ const ANTHROPIC_AI_PROMPT = "\n\nAssistant:";
 /** Where the Aggrag Flask server is being hosted, if any. */
 
 export const FLASK_BASE_URL = process.env.REACT_APP_API_URL;
+const url = new URL(FLASK_BASE_URL || "http://localhost:8000/");
+export const baseUrl = `${url.protocol}//${url.hostname}`;
+export const PORT_EXPRESS = process.env.PORT_EXPRESS;
 
 export async function call_flask_backend(
   route: string,
@@ -223,11 +226,12 @@ export function get_azure_openai_api_keys(): [
  * @param system_msg Optional; the system message to use if none is present in chat_history. (Ignored if chat_history already has a sys message.)
  */
 function construct_openai_chat_history(
-  prompt: string,
+  prompt: string | Dict[] | string[],
   chat_history?: ChatHistory,
   system_msg?: string,
 ): ChatHistory {
   const prompt_msg: ChatMessage = { role: "user", content: prompt };
+
   const sys_msg: ChatMessage[] =
     system_msg !== undefined ? [{ role: "system", content: system_msg }] : [];
   if (chat_history !== undefined && chat_history.length > 0) {
@@ -247,7 +251,7 @@ function construct_openai_chat_history(
    @returns raw query and response JSON dicts.
  */
 export async function call_chatgpt(
-  prompt: string,
+  prompt: string | string[] | Dict[],
   model: LLM,
   n = 1,
   temperature = 1.0,
@@ -301,6 +305,18 @@ export async function call_chatgpt(
   delete params?.system_msg;
   delete params?.chat_history;
 
+  if (params?.image_url) {
+    prompt = [
+      { type: "text", text: prompt },
+      {
+        type: "image_url",
+        image_url: {
+          url: params.image_url,
+        },
+      },
+    ];
+  }
+  if (params && "image_url" in params) delete params.image_url; // Check if params is defined
   const query: Dict = {
     model: modelname,
     n,
@@ -327,6 +343,8 @@ export async function call_chatgpt(
     );
   }
 
+  console.log("query");
+  console.log(query);
   // Try to call OpenAI
   let response: Dict = {};
   try {
@@ -421,7 +439,7 @@ export async function call_dalle(
  *  NOTE: It is recommended to set an environment variables AZURE_OPENAI_KEY and AZURE_OPENAI_ENDPOINT
  */
 export async function call_azure_openai(
-  prompt: string,
+  prompt: string | Dict[] | string[],
   model: LLM,
   n = 1,
   temperature = 1.0,
@@ -1029,11 +1047,11 @@ export async function call_huggingface(
       for (const chat_msg of params.chat_history as ChatHistory) {
         if (chat_msg.role === "user")
           hf_chat_hist.past_user_inputs = hf_chat_hist.past_user_inputs.concat(
-            chat_msg.content,
+            chat_msg.content as string,
           );
         else if (chat_msg.role === "assistant")
           hf_chat_hist.generated_responses =
-            hf_chat_hist.generated_responses.concat(chat_msg.content);
+            hf_chat_hist.generated_responses.concat(chat_msg.content as string);
         // ignore system messages
       }
     }
@@ -2301,7 +2319,10 @@ export async function upload_raw_docs_file(params: FormData): Promise<Dict> {
 
 export async function index_file(params: Dict): Promise<Dict> {
   const query: Dict = {
-    files_path: params.files_path,
+    p_folder: params.p_folder,
+    i_folder: params.i_folder,
+    file_node_id: params.file_node_id,
+    file: params.file,
     rag_name: params.rag_name,
     ragstore_settings: {},
   };
@@ -2337,7 +2358,8 @@ export async function rag_store_chat(
   const query: Dict = {
     rag_name: model,
     query: prompt,
-    index_path: params.index_path,
+    p_folder: params.p_folder,
+    i_folder: params.i_folder,
     ragstore_settings: {},
   };
   const rag_provider: RAGProvider | undefined = getRAGProvider(model as RAG);

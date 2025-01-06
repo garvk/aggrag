@@ -27,9 +27,7 @@ import logging
 import os
 
 from llama_index.llms.azure_openai import AzureOpenAI
-from llama_index.embeddings.azure_openai import AzureOpenAIEmbedding
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, StorageContext, load_index_from_storage
-from llama_index.core.settings import Settings
+from llama_index.core.schema import TextNode
 from llama_index.core.node_parser import HTMLNodeParser
 from langchain_core.documents import Document
 
@@ -152,8 +150,9 @@ class MetaLang:
             
         self.chat_engine = None
 
-        logger.debug(f"embed model: {self.embed_model}")
-        logger.debug(f"llm model: {self.llm},  {self.model_name}")
+        logger.info(f"embed model: {self.embed_model}")
+        logger.info(f"llm model: {self.llm}")
+        
     def documents_loader(self, DIR=None):
         """
         Placeholder for a RAG-specific document loader method.
@@ -164,7 +163,7 @@ class MetaLang:
         self.DATA_DIR = DIR or self.DATA_DIR
         if not os.path.exists(self.DATA_DIR):
             logger.error(f"Data directory does not exist: {self.DATA_DIR}")
-            raise FileNotFoundError(f"Data directory does not exist: {self.DATA_DIR}")
+            raise FileNotFoundError(f"Data directory does not exist")
         self.documents = SimpleDirectoryReader(self.DATA_DIR, recursive=True, exclude_hidden=True).load_data()
         return self.documents
 
@@ -209,7 +208,13 @@ class MetaLang:
 
             index = VectorStoreIndex(all_nodes, embed_model=self.embed_model, show_progress=True)
         else:
-            pass
+            
+            dummy_node = TextNode(text="this is a dummy node")
+            index = VectorStoreIndex(nodes=[dummy_node], embed_model=self.embed_model, show_progress=True)
+            # index = VectorStoreIndex(nodes=[BaseNode]) # empty index for placeholder
+
+        os.makedirs(os.path.dirname(persistent_path), exist_ok=True)  
+        index.storage_context.persist(persist_dir=persistent_path)
 
         return index
 
