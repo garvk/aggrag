@@ -38,7 +38,7 @@
 import { Dict } from "../backend/typing";
 import { PromptExecutionService } from "./PromptExecutionService";
 
-interface Edge {
+export interface Edge {
   id: string;
   source: string;
   target: string;
@@ -49,13 +49,13 @@ interface Edge {
   };
 }
 
-interface Node {
+export interface Node {
   id: string;
   type: string;
   data: any;
 }
 
-interface Flow {
+export interface Flow {
   nodes: Node[];
   edges: Edge[];
 }
@@ -134,13 +134,32 @@ export class ColoredFlowExecutor {
     console.log(`Executing node by type: ${node.type} for id: ${node.id}`);
     console.log(`The updated node data is:`, node.data);
     console.log(`context is for ${node.id}`, context);
+
+    let visibleFields: Dict<string>;
+
     switch (node.type) {
       case "textfields":
+        // Filter out fields that are marked as not visible
+        visibleFields = Object.entries(node.data.fields || {})
+          .filter(([key, _]) => {
+            const visibility = node.data.fields_visibility || {};
+            return visibility[key] !== false; // Only include if not explicitly set to false
+          })
+          .reduce((acc, [key, value]) => {
+            acc[key] = String(value);
+            return acc;
+          }, {} as Dict<string>);
+
         return {
           type: "textfields",
-          output: node.data.fields,
+          output: visibleFields,
           nodeId: node.id,
         };
+      // return {
+      //   type: "textfields",
+      //   output: node.data.fields,
+      //   nodeId: node.id,
+      // };
 
       case "prompt":
       case "promptNode":
@@ -182,17 +201,25 @@ export class ColoredFlowExecutor {
     context: Map<string, any>,
   ): Promise<any> {
     console.log("executing prompt node");
-    // Get input variables from connected nodes
+    console.log(`Full context details:`, context);
+
+    // Get all edges targeting this node
+    const incomingColoredEdges = Array.from(this.coloredEdges.values())
+      .flat()
+      .filter((edge) => edge.target === node.id);
+
+    console.log(`incoming colored edges are:`, incomingColoredEdges);
+
+    // Get all nodes from the context
+    const allNodes = Array.from(this.nodes.values());
+
+    console.log(`All nodes are: ${allNodes}`);
+
+    // Create variables dict for backward compatibility
     const variables: Dict<any> = {};
-
-    // Get colored edges that target this node
-    const incomingColoredEdges = this.coloredEdges.get(node.id) || [];
-
-    // Process each incoming edge to collect variables
     for (const edge of incomingColoredEdges) {
       const sourceResult = context.get(edge.source);
       if (sourceResult?.output) {
-        // Map the source output to the target handle (variable name)
         variables[edge.targetHandle] = sourceResult.output;
       }
     }
@@ -205,9 +232,12 @@ export class ColoredFlowExecutor {
         node.data.llms || [],
         node.data.rags || [],
         variables,
+        incomingColoredEdges, // Pass all colored edges
+        allNodes, // Pass all nodes
         node.data.apiKeys,
+        undefined, // onProgressChange is optional
       );
-      console.log("Result from prompt nodde: ", result);
+
       return {
         type: "prompt",
         output: result.responses,
@@ -215,11 +245,58 @@ export class ColoredFlowExecutor {
         nodeId: node.id,
       };
     } catch (error) {
-      // Asserting that error is of type Error
       const message = (error as Error).message;
       throw new Error(`Failed to execute prompt node: ${message}`);
     }
   }
+
+  // private async executePromptNode(
+  //   node: Node,
+  //   context: Map<string, any>,
+  // ): Promise<any> {
+  //   console.log("executing prompt node");
+  //   console.log(`Full context details:`, context)
+  //   // Get input variables from connected nodes
+  //   const variables: Dict<any> = {};
+
+  //   // Get colored edges that target this node
+  //   const incomingColoredEdges = this.coloredEdges.get(node.id) || [];
+  //   console.log(`incoming colored edges are:`, incomingColoredEdges)
+  //   console.log(`incoming nodes are:, $this.getConnectedNodes()`)
+  //   // Process each incoming edge to collect variables
+  //   for (const edge of incomingColoredEdges) {
+  //     const sourceResult = context.get(edge.source);
+  //     if (sourceResult?.output) {
+  //       // Map the source output to the target handle (variable name)
+  //       variables[edge.targetHandle] = sourceResult.output;
+  //     }
+  //   }
+
+  //   const promptService = new PromptExecutionService(node.id);
+
+  //   try {
+  //     const result = await promptService.executePromptNode(
+  //       node.data.prompt,
+  //       node.data.llms || [],
+  //       node.data.rags || [],
+  //       variables,
+  //       incomingColoredEdges, // to be validated
+  //       [], // to be validated
+  //       node.data.apiKeys,
+  //     );
+  //     console.log("Result from prompt nodde: ", result);
+  //     return {
+  //       type: "prompt",
+  //       output: result.responses,
+  //       cache: result.cache,
+  //       nodeId: node.id,
+  //     };
+  //   } catch (error) {
+  //     // Asserting that error is of type Error
+  //     const message = (error as Error).message;
+  //     throw new Error(`Failed to execute prompt node: ${message}`);
+  //   }
+  // }
 
   // For single flow; not for parallel flow
   //   public async execute(): Promise<Map<string, any>> {
