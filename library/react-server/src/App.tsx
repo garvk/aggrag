@@ -95,8 +95,6 @@ import {
   FLASK_BASE_URL,
   APP_IS_RUNNING_LOCALLY,
   browserTabIsActive,
-  baseUrl,
-  PORT_EXPRESS,
 } from "./backend/utils";
 import { Dict, JSONCompatible, LLMSpec } from "./backend/typing";
 import {
