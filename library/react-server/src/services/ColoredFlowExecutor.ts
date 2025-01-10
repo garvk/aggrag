@@ -340,7 +340,7 @@ export class ColoredFlowExecutor {
   }
 
   // For parallel flow
-  private determineExecutionOrder(): string[][] {
+  public determineExecutionOrder(): string[][] {
     const connectedNodes = this.getConnectedNodes();
     const inDegree = new Map<string, number>();
     const levelGroups: string[][] = [];

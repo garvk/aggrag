@@ -420,10 +420,64 @@ def index():
 
     return html_str
 
+@app.route("/app/validate", methods=["POST"])
+def proxy_express_validate():
+    """
+    This endpoint proxies validation requests to the Express server.
+    It handles the same input formats as /app/run:
+    1. Direct request data (JSON)
+    2. File path to a .cforge file
+    3. Actual .cforge file upload
+    
+    Request format:
+    {
+        "flow_path": str,  # Optional: Path to .cforge file
+        "flow": dict,      # Optional: Direct flow data
+    }
+    """
+    try:
+        request_data = request.get_json()
+        
+        # Check if we have a file path
+         # Check if we have a file path
+        if "flow_path" in request_data:
+            flow_path = request_data["flow_path"]
+            if not os.path.exists(flow_path):
+                return jsonify({"error": f"Flow file not found at path: {flow_path}"}), 404
+                
+            # Load the flow from file
+            try:
+                with open(flow_path, 'r') as f:
+                    flow_data = json.load(f)
+
+                    # The file contains a top-level "flow" key
+                    if "flow" in flow_data:
+                        request_data["flow"] = flow_data["flow"]
+                    else:
+                        return jsonify({"error": "Invalid flow structure"}), 400
+                # request_data["flow"] = flow_data
+            except Exception as e:
+                return jsonify({"error": f"Error reading flow file: {str(e)}"}), 500
+
+        # Forward the request to Express server
+        url = f"http://localhost:{settings.PORT_EXPRESS}"
+        
+        response = requests.post(
+            f"{url}/app/validate",
+            json=request_data,
+            headers={
+                "Content-Type": "application/json"
+            }
+        )
+
+        return response.json(), response.status_code
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/app/run", methods=["POST"])
 def proxy_express_run():
-    """
+    """/ap
     This endpoint handles three types of inputs:
     1. Direct request data (JSON)
     2. File path to a .cforge file

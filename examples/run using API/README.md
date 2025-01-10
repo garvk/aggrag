@@ -3,7 +3,7 @@
 ## Motivation: Chaining of usecases
 Running any use case with an API allows the user to run any usecase from any other usecase. Therefore, allowing chaining of usecases.
 
-Aggrag provides a REST API that allows you to run your configured flows programmatically. This is particularly useful when you want to integrate Aggrag's capabilities into your own applications or you want to chain together multiple use cases.
+Aggrag provides a REST API that allows you to run your configured flows programmatically. This is particularly useful when you want to integrate Aggrag's capabilities into your own applications and/or you want to chain together multiple use cases.
 
 ## Prerequisites
 
@@ -29,8 +29,8 @@ The request should be a POST request with the following structure:
 {
 "flow_path": "configurations/<usecase_name>/<iteration_name>/flow-<timestamp>.cforge",
 "vars": {
-"variable_name": "value",
-"another_variable": "another_value"
+"@variable_name": "value",
+"@another_variable": "another_value"
 }
 ```
 
