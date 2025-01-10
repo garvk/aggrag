@@ -161,6 +161,14 @@ export class ColoredFlowExecutor {
       //   nodeId: node.id,
       // };
 
+      case "uploadfilefields":
+      // For file fields, we want to pass the file paths through
+      return {
+        type: "uploadfilefields",
+        output: node.data.fields || {},
+        nodeId: node.id,
+      };
+
       case "prompt":
       case "promptNode":
         return await this.executePromptNode(node, context);
@@ -195,49 +203,77 @@ export class ColoredFlowExecutor {
     return executionContext;
   }
 
-  // library/react-server/src/services/ColoredFlowExecutor.ts
   private async executePromptNode(
     node: Node,
     context: Map<string, any>,
   ): Promise<any> {
     console.log("executing prompt node");
     console.log(`Full context details:`, context);
-
+  
     // Get all edges targeting this node
     const incomingColoredEdges = Array.from(this.coloredEdges.values())
       .flat()
       .filter((edge) => edge.target === node.id);
-
-    console.log(`incoming colored edges are:`, incomingColoredEdges);
-
+  
     // Get all nodes from the context
     const allNodes = Array.from(this.nodes.values());
-
-    console.log(`All nodes are: ${allNodes}`);
-
+  
     // Create variables dict for backward compatibility
     const variables: Dict<any> = {};
+    
+    // Prepare RAG data structure similar to PromptNode.tsx
+    const ragData: any = {
+      p_folder: process.env.P_FOLDER || "",
+      i_folder: process.env.I_FOLDER || "",
+      query: {},
+      uid: []
+    };
+  
     for (const edge of incomingColoredEdges) {
       const sourceResult = context.get(edge.source);
       if (sourceResult?.output) {
+        if (edge.targetHandle === 'rag_knowledge_base') {
+          // Handle RAG data similar to PromptNode.tsx lines 1191-1208
+          const fileData = sourceResult.output;
+          Object.values(fileData).forEach((filePath: unknown) => {
+            try {
+              // Extract UID from file path following the same pattern as PromptNode
+              if (typeof filePath === 'string') {
+                const uid = filePath.split("/")[3].split("-")[1];
+                const pathParts = filePath.split('/');
+                console.log(`File Path parts are: ${pathParts}`)
+                ragData.i_folder = pathParts[1]
+                ragData.p_folder = pathParts[0]
+                ragData.uid.push(uid);
+              }
+          
+            } catch (err) {
+              console.error("Error extracting UID from file path:", err);
+            }
+          });
+        }
+        // Store all variables for template processing
         variables[edge.targetHandle] = sourceResult.output;
       }
     }
-
+  
     const promptService = new PromptExecutionService(node.id);
-
+  
     try {
+      // Pass ragData through variables to maintain the structure queryRAG expects
+      variables.__ragData = ragData;
+      
       const result = await promptService.executePromptNode(
         node.data.prompt,
         node.data.llms || [],
         node.data.rags || [],
         variables,
-        incomingColoredEdges, // Pass all colored edges
-        allNodes, // Pass all nodes
+        incomingColoredEdges,
+        allNodes,
         node.data.apiKeys,
-        undefined, // onProgressChange is optional
+        undefined  // onProgressChange is optional
       );
-
+  
       return {
         type: "prompt",
         output: result.responses,
@@ -250,75 +286,7 @@ export class ColoredFlowExecutor {
     }
   }
 
-  // private async executePromptNode(
-  //   node: Node,
-  //   context: Map<string, any>,
-  // ): Promise<any> {
-  //   console.log("executing prompt node");
-  //   console.log(`Full context details:`, context)
-  //   // Get input variables from connected nodes
-  //   const variables: Dict<any> = {};
-
-  //   // Get colored edges that target this node
-  //   const incomingColoredEdges = this.coloredEdges.get(node.id) || [];
-  //   console.log(`incoming colored edges are:`, incomingColoredEdges)
-  //   console.log(`incoming nodes are:, $this.getConnectedNodes()`)
-  //   // Process each incoming edge to collect variables
-  //   for (const edge of incomingColoredEdges) {
-  //     const sourceResult = context.get(edge.source);
-  //     if (sourceResult?.output) {
-  //       // Map the source output to the target handle (variable name)
-  //       variables[edge.targetHandle] = sourceResult.output;
-  //     }
-  //   }
-
-  //   const promptService = new PromptExecutionService(node.id);
-
-  //   try {
-  //     const result = await promptService.executePromptNode(
-  //       node.data.prompt,
-  //       node.data.llms || [],
-  //       node.data.rags || [],
-  //       variables,
-  //       incomingColoredEdges, // to be validated
-  //       [], // to be validated
-  //       node.data.apiKeys,
-  //     );
-  //     console.log("Result from prompt nodde: ", result);
-  //     return {
-  //       type: "prompt",
-  //       output: result.responses,
-  //       cache: result.cache,
-  //       nodeId: node.id,
-  //     };
-  //   } catch (error) {
-  //     // Asserting that error is of type Error
-  //     const message = (error as Error).message;
-  //     throw new Error(`Failed to execute prompt node: ${message}`);
-  //   }
-  // }
-
-  // For single flow; not for parallel flow
-  //   public async execute(): Promise<Map<string, any>> {
-  //     console.log("Determining execution order...");
-  //     const executionOrder = this.determineExecutionOrder();
-  //     console.log("Execution order determined:", executionOrder);
-
-  //     console.log("Starting execution of flow.");
-  //     const executionContext = new Map<string, any>();
-  //     const visited = new Set<string>();
-
-  //     // Execute nodes in the determined order
-  //     for (const nodeId of executionOrder) {
-  //       if (!visited.has(nodeId)) {
-  //         await this.executeColoredFlow(nodeId, executionContext, visited);
-  //       }
-  //     }
-
-  //     console.log("Execution of flow completed.");
-  //     return executionContext;
-  //   }
-
+ 
   private async executeColoredFlow(
     currentNodeId: string,
     executionContext: Map<string, any>,

@@ -63,43 +63,96 @@ export class PromptExecutionService {
     edges: Edge[],
   ): Dict<(string | TemplateVarInfo)[]> {
     const pulled_data: Dict<(string | TemplateVarInfo)[]> = {};
-
-    templateVars.forEach((varName) => {
-      const sourceEdge = edges.find(
+  
+    // Add rag_knowledge_base to template vars if it exists in variables
+    const allVars = new Set(templateVars);
+    const ragEdge = edges.find(e => e.targetHandle === 'rag_knowledge_base' && e.target === this.nodeId);
+    if (ragEdge) {
+      allVars.add('rag_knowledge_base');
+    }
+  
+    Array.from(allVars).forEach((varName) => {
+      // Find all edges targeting this variable name
+      const sourceEdges = edges.filter(
         (e) => e.target === this.nodeId && e.targetHandle === varName,
       );
-
-      if (sourceEdge) {
+  
+      pulled_data[varName] = [];
+  
+      sourceEdges.forEach(sourceEdge => {
         const sourceNode = nodes.find((n) => n.id === sourceEdge.source);
-        if (sourceNode?.data?.fields) {
-          // Filter out template variables and respect field visibility
+        if (varName === 'rag_knowledge_base' && sourceNode?.data?.fields) {
+          // Handle RAG data specifically
+          const ragPaths = Object.values(sourceNode.data.fields)
+            .filter(value => value !== undefined)
+            .map(value => String(value));
+          if (ragPaths.length > 0) {
+            pulled_data[varName].push(...ragPaths);
+          }
+        } else if (sourceNode?.data?.fields) {
+          // Regular field handling
           const validFields = Object.entries(sourceNode.data.fields)
             .filter(([key, value]) => {
-              // Check if field is visible based on fields_visibility
               const visibility = sourceNode.data.fields_visibility || {};
-              if (visibility[key] === false) {
-                return false;
-              }
-
-              // Check if value is a template variable or undefined
+              if (visibility[key] === false) return false;
               const strValue = String(value);
-              return (
-                !strValue.includes("{@") &&
-                !strValue.includes("{=") &&
-                value !== undefined
-              );
+              return !strValue.includes("{@") && !strValue.includes("{=") && value !== undefined;
             })
             .map(([_, value]) => String(value) as string | TemplateVarInfo);
-
+  
           if (validFields.length > 0) {
-            pulled_data[varName] = validFields;
+            pulled_data[varName].push(...validFields);
           }
         }
-      }
+      });
     });
-
+  
     return pulled_data;
   }
+
+  // private pullInputData(
+  //   templateVars: string[],
+  //   nodes: Node[],
+  //   edges: Edge[],
+  // ): Dict<(string | TemplateVarInfo)[]> {
+  //   const pulled_data: Dict<(string | TemplateVarInfo)[]> = {};
+
+  //   templateVars.forEach((varName) => {
+  //     const sourceEdge = edges.find(
+  //       (e) => e.target === this.nodeId && e.targetHandle === varName,
+  //     );
+
+  //     if (sourceEdge) {
+  //       const sourceNode = nodes.find((n) => n.id === sourceEdge.source);
+  //       if (sourceNode?.data?.fields) {
+  //         // Filter out template variables and respect field visibility
+  //         const validFields = Object.entries(sourceNode.data.fields)
+  //           .filter(([key, value]) => {
+  //             // Check if field is visible based on fields_visibility
+  //             const visibility = sourceNode.data.fields_visibility || {};
+  //             if (visibility[key] === false) {
+  //               return false;
+  //             }
+
+  //             // Check if value is a template variable or undefined
+  //             const strValue = String(value);
+  //             return (
+  //               !strValue.includes("{@") &&
+  //               !strValue.includes("{=") &&
+  //               value !== undefined
+  //             );
+  //           })
+  //           .map(([_, value]) => String(value) as string | TemplateVarInfo);
+
+  //         if (validFields.length > 0) {
+  //           pulled_data[varName] = validFields;
+  //         }
+  //       }
+  //     }
+  //   });
+
+  //   return pulled_data;
+  // }
 
   async executePromptNode(
     promptTemplate: string,
@@ -188,11 +241,23 @@ export class PromptExecutionService {
 
     // Execute RAG queries if present
     if (ragSpecs?.length > 0) {
+      const ragPath = pulled_data.rag_knowledge_base?.[0] as string;
+      const pathParts = ragPath.split('/');
+      console.log(`Path parts are: ${pathParts}`)
+      const ragData = variables.__ragData || {
+        p_folder: pathParts[0],
+        i_folder: pathParts[1],
+        query: pulled_data,
+        uid: []
+      };
+      
+      ragData.query = pulled_data; // Use pulled_data for the query
+      
       const ragResult = await queryRAG(
         this.nodeId,
         ragSpecs,
         promptTemplate,
-        pulled_data,
+        ragData,
         [],
         false,
         onProgressChange,

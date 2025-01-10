@@ -1672,6 +1672,17 @@ export async function queryRAG(
   errors: Dict<string[]>;
   cache?: Dict<string | LLMSpec>;
 }> {
+  // Add console logs for all parameters
+  console.log('queryRAG parameters:');
+  console.log('id:', id);
+  // console.log('rag:', rag);
+  // console.log('prompt:', prompt);
+  console.log('vars:', vars);
+  // console.log('chat_histories:', chat_histories);
+  // console.log('no_cache:', no_cache);
+  console.log('progress_listener:', progress_listener);
+  console.log('cancel_id:', cancel_id);
+
   // Verify the integrity of the params
   if (typeof id !== "string" || id.trim().length === 0)
     throw new Error("id is improper format (length 0 or not a string)");

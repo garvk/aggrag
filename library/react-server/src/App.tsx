@@ -776,11 +776,11 @@ const App = () => {
 
   const handleRunFlow = async () => {
     if (!rfInstance) return;
-  
+
     try {
       setIsFlowRunning(true);
       const flow = rfInstance.toObject();
-      
+
       const response = await fetch(`${FLASK_BASE_URL}app/run`, {
         method: "POST",
         headers: {
@@ -789,19 +789,19 @@ const App = () => {
         },
         body: JSON.stringify({ flow }),
       });
-  
+
       const data = await response.json();
-  
+
       if (!data.success) {
         throw new Error(data.error || "Flow execution failed");
       }
-  
+
       showNotification(
         "Success",
         "Flow execution completed successfully!",
         "green",
       );
-  
+
       updateNodesWithResults(data.results);
       return data; // Return the API response data
     } catch (error) {
@@ -816,7 +816,6 @@ const App = () => {
       setIsFlowRunning(false);
     }
   };
-
 
   const updateNodesWithResults = (results: Record<string, any>) => {
     // This will be implemented as we add node execution handlers

@@ -48,16 +48,16 @@ const RunFlowDropdown: React.FC<RunFlowDropdownProps> = ({
       });
       setShowRunModal(true);
       setDropdownOpen(false);
-    
+
       const result = await onRun();
-      console.log("result:")
-      console.log(result)
+      console.log("result:");
+      console.log(result);
       // Check if result exists and has success flag
       if (result) {
         setRunResult({
           status: "Success",
-          output: result.results,  // Directly use the results object
-          logs: null
+          output: result.results, // Directly use the results object
+          logs: null,
         });
       } else {
         throw new Error("Invalid response from server");
@@ -247,16 +247,16 @@ const RunFlowDropdown: React.FC<RunFlowDropdownProps> = ({
           <Stack spacing="md">
             <Text weight={500}>Run Status:</Text>
             <Code
-                block
-                color={
-                  runResult.status === "Success" 
-                    ? "green" 
-                    : runResult.status === "Running" 
-                      ? "yellow" 
-                      : "red"
-                }
-              >
-                {runResult.status}
+              block
+              color={
+                runResult.status === "Success"
+                  ? "green"
+                  : runResult.status === "Running"
+                    ? "yellow"
+                    : "red"
+              }
+            >
+              {runResult.status}
             </Code>
 
             <Text weight={500}>Results:</Text>
