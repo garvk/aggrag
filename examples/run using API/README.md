@@ -104,6 +104,8 @@ Valid `vars` object in the API request is:
 Currently the following nodes are supported:
  - Text Fields Node
  - Prompt Node
+ - File Fields Node
+ 
 
 Support for other nodes will be added based on the realised usefulness of the API. Should you need other nodes to be supported, kindly raise an issue or reach out! 
 
