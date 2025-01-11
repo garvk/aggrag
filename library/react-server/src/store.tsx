@@ -411,11 +411,33 @@ export const initRAGProviderMenu: LLMSpec[] = [
   },
 ];
 
-const togetherModels = TogetherChatSettings.schema.properties.model
-  .enum as string[];
+// src/store.tsx
+// src/store.tsx
+// const togetherModels =
+//   (TogetherChatSettings?.schema?.properties?.model as unknown as string[]) ||
+//   [];
+const togetherModels = Array.isArray(
+  TogetherChatSettings?.schema?.properties?.model,
+)
+  ? TogetherChatSettings.schema.properties.model
+  : [];
+
+// const togetherModels = TogetherChatSettings?.schema?.properties?.model
+//   .enum as string[];
+if (!togetherModels) {
+  console.warn(
+    "Warning: TogetherChatSettings schema is not defined. Defaulting to backup settings.",
+  );
+  // Implement fallback logic here
+}
 const togetherGroups = () => {
   const groupNames: string[] = [];
   const groups: { [key: string]: LLMGroup } = {};
+  if (!Array.isArray(togetherModels)) {
+    console.warn("Warning: togetherModels is not an array");
+    return [];
+  }
+
   togetherModels.forEach((model) => {
     const [groupName, modelName] = model.split("/");
     const spec: LLMSpec = {
@@ -486,6 +508,7 @@ export interface StoreHandles {
   duplicateNode: (id: string, offset?: { x?: number; y?: number }) => Node;
   setNodes: (newnodes: Node[]) => void;
   setEdges: (newedges: Edge[]) => void;
+  updateEdge: (id: string, data: Dict) => void;
   removeEdge: (id: string) => void;
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
@@ -970,6 +993,23 @@ const useStore = create<StoreHandles>((set, get) => ({
       edges: newedges,
     });
   },
+  // Add to the store implementation
+  updateEdge: (id: string, data: Dict) => {
+    set({
+      edges: get().edges.map((edge) => {
+        if (edge.id === id) {
+          return {
+            ...edge,
+            data: {
+              ...edge.data,
+              ...data,
+            },
+          };
+        }
+        return edge;
+      }),
+    });
+  },
   removeEdge: (id) => {
     set({
       edges: applyEdgeChanges([{ id, type: "remove" }], get().edges),
@@ -1013,6 +1053,7 @@ const useStore = create<StoreHandles>((set, get) => ({
     connection.interactionWidth = 40;
     connection.markerEnd = { type: MarkerType.Arrow, width: 22, height: 22 }; // 22px
     connection.type = "default";
+    connection.data = { colored: false }; // Initialize data
 
     set({
       edges: addEdge(connection, get().edges), // get().edges.concat(connection)
@@ -1023,3 +1064,4 @@ const useStore = create<StoreHandles>((set, get) => ({
 }));
 
 export default useStore;
+// src/store.tsx

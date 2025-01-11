@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useContext,
 } from "react";
+
 import Joyride, { CallBackProps, Placement, STATUS, Step } from "react-joyride";
 import ReactFlow, {
   Controls,
@@ -43,8 +44,9 @@ import {
   IconArrowsSplit,
   IconForms,
   IconAbacus,
-  IconCheck,
-  IconX,
+  IconPlayerPlay,
+  // IconCheck,
+  // IconX,
 } from "@tabler/icons-react";
 import { useNotification } from "./Notification";
 import RemoveEdge from "./RemoveEdge";
@@ -124,6 +126,7 @@ import {
 import "./CssStyles.css";
 import { HintRunsType, incrementHintRun, setHintSteps } from "./HintHelpers";
 import CustomModal from "./CustomModal";
+import RunFlowDropdown from "./RunFlowDropdown";
 const IS_ACCEPTED_BROWSER =
   (isChrome ||
     isChromium ||
@@ -274,6 +277,7 @@ const App = () => {
     triggerHint,
     setTriggerHint,
   } = useStore(selector, shallow);
+  const [isFlowRunning, setIsFlowRunning] = useState(false);
 
   const { showNotification } = useNotification();
   const [isUseCaseCreated, setIsUseCaseCreated] = useState<any>();
@@ -729,6 +733,94 @@ const App = () => {
 
   const handleSaveAndCommit = () => {
     handleSaveFlow(true);
+  };
+
+  const validateFlow = async () => {
+    if (!rfInstance) return;
+
+    try {
+      setIsFlowRunning(true);
+
+      // Get current flow data
+      const flow = rfInstance.toObject();
+
+      // Call the backend API to validate the flow
+      const response = await fetch(`${FLASK_BASE_URL}app/validate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+        body: JSON.stringify({ flow }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Flow validation failed");
+      }
+
+      return data;
+    } catch (error) {
+      console.error("Flow validation error:", error);
+      showNotification(
+        "Error",
+        error instanceof Error ? error.message : "Flow validation failed",
+        "red",
+      );
+      throw error;
+    } finally {
+      setIsFlowRunning(false);
+    }
+  };
+
+  const handleRunFlow = async () => {
+    if (!rfInstance) return;
+
+    try {
+      setIsFlowRunning(true);
+      const flow = rfInstance.toObject();
+
+      const response = await fetch(`${FLASK_BASE_URL}app/run`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+        body: JSON.stringify({ flow }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Flow execution failed");
+      }
+
+      showNotification(
+        "Success",
+        "Flow execution completed successfully!",
+        "green",
+      );
+
+      updateNodesWithResults(data.results);
+      return data; // Return the API response data
+    } catch (error) {
+      console.error("Flow execution error:", error);
+      showNotification(
+        "Error",
+        error instanceof Error ? error.message : "Flow execution failed",
+        "red",
+      );
+      throw error; // Re-throw the error to be caught by handleRun
+    } finally {
+      setIsFlowRunning(false);
+    }
+  };
+
+  const updateNodesWithResults = (results: Record<string, any>) => {
+    // This will be implemented as we add node execution handlers
+    // It will update the UI state of nodes with their execution results
+    console.log("Execution results:", results);
   };
 
   const handleSaveFlow = (
@@ -3467,6 +3559,50 @@ const App = () => {
               >
                 Import
               </Button>
+              <RunFlowDropdown
+                onValidate={validateFlow}
+                onRun={handleRunFlow}
+                isRunning={isFlowRunning || !rfInstance}
+                className="run-btn"
+                style={{
+                  float: "left",
+                  backgroundColor: "#198c8a",
+                }}
+                compact
+                size="sm"
+                icon={
+                  isFlowRunning ? (
+                    <Loader size="xs" color="white" mr="4px" />
+                  ) : (
+                    <IconPlayerPlay size="16px" />
+                  )
+                }
+              />
+              {/* <Button
+                className="run-btn"
+                size="sm"
+                variant="filled"
+                compact
+                // color="green"
+                mr="xs"
+                style={{
+                  float: "left",
+                  backgroundColor: "#198c8a",
+                  // '&:hover': {
+                  //   backgroundColor: "#3dd409"
+                  // }
+                }}
+                // style={{ float: "left" }}
+                onClick={handleRunFlow}
+                disabled={isFlowRunning || !rfInstance}
+              >
+                {isFlowRunning ? (
+                  <Loader size="xs" color="white" mr="4px" />
+                ) : (
+                  <IconPlayerPlay size="16px" />
+                )}
+                {isFlowRunning ? "Running..." : "Run Flow"}
+              </Button> */}
               <Menu
                 transitionProps={{ transition: "pop-top-left" }}
                 position="bottom-end"
