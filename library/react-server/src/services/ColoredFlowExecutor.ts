@@ -38,6 +38,7 @@
 import { Dict } from "../backend/typing";
 import { PromptExecutionService } from "./PromptExecutionService";
 import { SplitNodeExecutionService } from "./SplitNodeExecutionService";
+import { JoinFormat } from "./../JoinNode";
 
 export interface Edge {
   id: string;
@@ -173,6 +174,10 @@ export class ColoredFlowExecutor {
       case "split":
         return await this.executeSplitNode(node, context);
 
+      case "join":
+      case "joinNode":
+        return await this.executeJoinNode(node, context);
+
       case "prompt":
       case "promptNode":
         return await this.executePromptNode(node, context);
@@ -205,6 +210,82 @@ export class ColoredFlowExecutor {
 
     console.log("Execution of flow completed.");
     return executionContext;
+  }
+
+  private async executeJoinNode(
+    node: Node,
+    context: Map<string, any>,
+  ): Promise<any> {
+    console.log("executing join node");
+  
+    const incomingColoredEdges = Array.from(this.coloredEdges.values())
+      .flat()
+      .filter((edge) => edge.target === node.id);
+  
+    // Use default format if none specified
+    const format = node.data?.format || node.data?.joinFormat || JoinFormat.NumList;
+  
+    // Create variables dict for input processing
+    const variables: Dict<any> = {};
+  
+    // Process incoming edges and collect input data
+    for (const edge of incomingColoredEdges) {
+      const sourceResult = context.get(edge.source);
+      if (sourceResult?.output) {
+        // Convert object values to array of strings
+        if (typeof sourceResult.output === 'object' && !Array.isArray(sourceResult.output)) {
+          const texts = Object.values(sourceResult.output).map((val: unknown) => String(val));
+          variables[edge.targetHandle] = texts;
+        } else {
+          variables[edge.targetHandle] = Array.isArray(sourceResult.output) 
+            ? sourceResult.output.map((val: unknown) => String(val))
+            : [String(sourceResult.output)];
+        }
+      }
+    }
+  
+    try {
+      // Get all texts to join
+      const allTexts = Object.values(variables).flat();
+      
+      // Join texts using the joinTexts function logic
+      let joinedText = '';
+      if (format === JoinFormat.DubNewLine || format === JoinFormat.NewLine) {
+        joinedText = allTexts.join(format);
+      } else if (format === JoinFormat.DashedList) {
+        joinedText = allTexts.map(t => "- " + t).join("\n");
+      } else if (format === JoinFormat.NumList) {
+        joinedText = allTexts.map((t, i) => `${i + 1}. ${t}`).join("\n");
+      } else if (format === JoinFormat.PyArr) {
+        joinedText = JSON.stringify(allTexts);
+      } else {
+        joinedText = allTexts[0] || '';
+      }
+  
+      return {
+        type: "join",
+        output: {
+          text: joinedText,
+          metadata: {},
+          llm: undefined
+        },
+        nodeId: node.id,
+        metadata: {
+          joinFormat: format,
+          groupByVar: node.data.groupByVar || "A",
+          groupByLLM: node.data.groupByLLM || "within",
+          preservedMetadata: {},
+          vars: [],
+          metavars: [],
+          numLLMs: 0
+        },
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to execute join node: ${error.message}`);
+      }
+      throw error;
+    }
   }
 
   private async executeSplitNode(

@@ -105,6 +105,7 @@ Valid `vars` object in the API request is:
 5. API Validation (Feature not a bug):
    - Pre-execution validation for node configuration recommended
    - Generate placeholder values for required inputs
+6. For Join Node, the UI execution does not save the the join 'format' in the cforge file. SO API execution, currently, only executes the default 'format' equivalent to 'JoinFormat.NumList' (makes it into numbers) 
 
 
 ## Supported Nodes with API
@@ -112,6 +113,7 @@ Currently the following nodes are supported:
  - Text Fields Node
  - Prompt Node
  - Split Node
+ - Join Node
  - File Fields Node
  
 

@@ -192,12 +192,11 @@ Test split node execution with:
 - LLM response input with metadata ✅
 - Multiple parallel inputs ✅
 - Different split formats ✅
-- Verify metadata preservation  ❌
+- Verify metadata preservation ❌
 - Verify colored edge handling ✅
 - Test parallel execution ✅
 - Validate output format consistency ❌
 - Test using API with user input such as `@user_dm` ✅
-
 
 ### 7. Documentation Updates
 
@@ -215,8 +214,8 @@ Support for other nodes will be added based on the realised usefulness of the AP
 
 1. Core Functionality:
 
-- Handle both string and TemplateVarInfo inputs (like UI) 
-- Maintain exact parity with UI's metadata handling 
+- Handle both string and TemplateVarInfo inputs (like UI)
+- Maintain exact parity with UI's metadata handling
 - Use splitFormat from node data only (no defaults)
 - Use same cache mechanism as UI
 
@@ -232,8 +231,7 @@ Support for other nodes will be added based on the realised usefulness of the AP
 - Add comments for future code unification
 - Use existing cache and metadata handling patterns
 
-
 ### 8. Improvements/Current Bugs: TODO ❌
 
-1. Split Node Output Format Issue:  TODO ❌
+1. Split Node Output Format Issue: TODO ❌
    When split node output is connected to a prompt node, the prompt template shows "[object Object]" instead of the actual text content. This happens despite implementing toString() and toJSON() methods on the split objects.
