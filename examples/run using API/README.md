@@ -99,11 +99,19 @@ Valid `vars` object in the API request is:
 1. Currently, the API execution is an experimental feature. 
 2. Real-time visualization features available in the UI are not available through the API
 3. Some node types might behave differently in API mode compared to UI mode
+4. Split Node Output Format Issue:
+   - When split node output connects to a prompt node, template shows "[object Object]"
+   - Workaround in progress
+5. API Validation (Feature not a bug):
+   - Pre-execution validation for node configuration recommended
+   - Generate placeholder values for required inputs
+
 
 ## Supported Nodes with API
 Currently the following nodes are supported:
  - Text Fields Node
  - Prompt Node
+ - Split Node
  - File Fields Node
  
 
@@ -118,3 +126,14 @@ Support for other nodes will be added based on the realised usefulness of the AP
 5. Consider implementing proper error handling in your application
 
 For more examples and use cases, check the `/examples` directory in the repository.
+
+For more details on implementation, see the xxxPlan.md files in `library/react-server/src/services/plans/`:
+
+curl -X POST http://localhost:8000/app/run \
+      -H "Content-Type: application/json" \
+      -d '{
+        "flow_path": "configurations/file upload api test__1734006659822/iteration 1/flow-1736246998814.cforge",
+        "vars": {
+    "@user_dm": "\nThis effectively breaks up the text, providing a flow to the information being conveyed.\n\nThere you have it! This response has incorporated a list of items, code, several terminal commands, new lines, and paragraphs. I hope you find it helpful!\n"
+}
+      }'
