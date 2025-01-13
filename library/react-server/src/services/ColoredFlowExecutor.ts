@@ -35,9 +35,10 @@
  */
 
 // Currently coloredFlowExecutor wont handle parallel flows. Plus its an experimental feature
-import { Dict } from "../backend/typing";
+import { Dict, LLMResponse, LLMSpec } from "../backend/typing";
 import { PromptExecutionService } from "./PromptExecutionService";
 import { SplitNodeExecutionService } from "./SplitNodeExecutionService";
+import { CodeExecutionService } from "./CodeExecutionService";
 import { JoinFormat } from "./../JoinNode";
 
 export interface Edge {
@@ -51,10 +52,44 @@ export interface Edge {
   };
 }
 
+// export interface Node {
+//   id: string;
+//   type: string;
+//   data: any;
+// }
+
 export interface Node {
   id: string;
   type: string;
-  data: any;
+  data: {
+    code?: string;
+    splitFormat?: any;
+    joinFormat?: JoinFormat;
+    language?: "python" | "javascript";
+    sandbox?: boolean;
+    fields?: Dict<any>;
+    fields_visibility?: Dict<boolean>;
+    format?: JoinFormat;
+    groupByVar?: string;
+    groupByLLM?: string;
+    prompt?: string;
+    llms?: LLMSpec[];
+    rags?: LLMSpec[];
+    apiKeys?: Dict<string>;
+  };
+}
+
+// Add specific type guards for processor and evaluator nodes
+export function isProcessorNode(node: Node): boolean {
+  return node.type === "processor" || node.type === "processorNode";
+}
+
+export function isEvaluatorNode(node: Node): boolean {
+  return node.type === "evaluator" || node.type === "evaluatorNode";
+}
+
+export function isCodeNode(node: Node): boolean {
+  return isProcessorNode(node) || isEvaluatorNode(node);
 }
 
 export interface Flow {
@@ -178,6 +213,14 @@ export class ColoredFlowExecutor {
       case "joinNode":
         return await this.executeJoinNode(node, context);
 
+      case "processor":
+      case "processorNode":
+        return await this.executeProcessorNode(node, context);
+
+      case "evaluator":
+      case "evaluatorNode":
+        return await this.executeEvaluatorNode(node, context);
+
       case "prompt":
       case "promptNode":
         return await this.executePromptNode(node, context);
@@ -212,62 +255,163 @@ export class ColoredFlowExecutor {
     return executionContext;
   }
 
+  private async executeProcessorNode(
+    node: Node,
+    context: Map<string, any>,
+  ): Promise<any> {
+    console.log("executing processor node");
+
+    const incomingColoredEdges = Array.from(this.coloredEdges.values())
+      .flat()
+      .filter((edge) => edge.target === node.id);
+
+    // Get input data from incoming edges
+    const inputs: LLMResponse[] = [];
+    for (const edge of incomingColoredEdges) {
+      const sourceResult = context.get(edge.source);
+      if (sourceResult?.output) {
+        inputs.push(sourceResult.output);
+      }
+    }
+
+    if (!node.data.code) {
+      throw new Error(`No code provided for ${node.type} node`);
+    }
+
+    try {
+      const codeExecutionService = new CodeExecutionService(node.id);
+      const result = await codeExecutionService.executeCode(
+        node.data.code,
+        inputs,
+        node.data.language || "javascript",
+        "processor",
+        node.data.sandbox !== false,
+      );
+
+      return {
+        type: "processor",
+        output: result.output,
+        nodeId: node.id,
+        metadata: result.metadata,
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to execute processor node: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  private async executeEvaluatorNode(
+    node: Node,
+    context: Map<string, any>,
+  ): Promise<any> {
+    console.log("executing evaluator node");
+
+    const incomingColoredEdges = Array.from(this.coloredEdges.values())
+      .flat()
+      .filter((edge) => edge.target === node.id);
+
+    // Get input data from incoming edges
+    const inputs: LLMResponse[] = [];
+    for (const edge of incomingColoredEdges) {
+      const sourceResult = context.get(edge.source);
+      if (sourceResult?.output) {
+        inputs.push(sourceResult.output);
+      }
+    }
+    if (!node.data.code) {
+      throw new Error(`No code provided for ${node.type} node`);
+    }
+    try {
+      const codeExecutionService = new CodeExecutionService(node.id);
+      const result = await codeExecutionService.executeCode(
+        node.data.code,
+        inputs,
+        node.data.language || "javascript",
+        "evaluator",
+        node.data.sandbox !== false,
+      );
+
+      return {
+        type: "evaluator",
+        output: result.output,
+        nodeId: node.id,
+        metadata: {
+          ...result.metadata,
+          evaluationScores: result.output,
+        },
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to execute evaluator node: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
   private async executeJoinNode(
     node: Node,
     context: Map<string, any>,
   ): Promise<any> {
     console.log("executing join node");
-  
+
     const incomingColoredEdges = Array.from(this.coloredEdges.values())
       .flat()
       .filter((edge) => edge.target === node.id);
-  
+
     // Use default format if none specified
-    const format = node.data?.format || node.data?.joinFormat || JoinFormat.NumList;
-  
+    const format =
+      node.data?.format || node.data?.joinFormat || JoinFormat.NumList;
+
     // Create variables dict for input processing
     const variables: Dict<any> = {};
-  
+
     // Process incoming edges and collect input data
     for (const edge of incomingColoredEdges) {
       const sourceResult = context.get(edge.source);
       if (sourceResult?.output) {
         // Convert object values to array of strings
-        if (typeof sourceResult.output === 'object' && !Array.isArray(sourceResult.output)) {
-          const texts = Object.values(sourceResult.output).map((val: unknown) => String(val));
+        if (
+          typeof sourceResult.output === "object" &&
+          !Array.isArray(sourceResult.output)
+        ) {
+          const texts = Object.values(sourceResult.output).map((val: unknown) =>
+            String(val),
+          );
           variables[edge.targetHandle] = texts;
         } else {
-          variables[edge.targetHandle] = Array.isArray(sourceResult.output) 
+          variables[edge.targetHandle] = Array.isArray(sourceResult.output)
             ? sourceResult.output.map((val: unknown) => String(val))
             : [String(sourceResult.output)];
         }
       }
     }
-  
+
     try {
       // Get all texts to join
       const allTexts = Object.values(variables).flat();
-      
+
       // Join texts using the joinTexts function logic
-      let joinedText = '';
+      let joinedText = "";
       if (format === JoinFormat.DubNewLine || format === JoinFormat.NewLine) {
         joinedText = allTexts.join(format);
       } else if (format === JoinFormat.DashedList) {
-        joinedText = allTexts.map(t => "- " + t).join("\n");
+        joinedText = allTexts.map((t) => "- " + t).join("\n");
       } else if (format === JoinFormat.NumList) {
         joinedText = allTexts.map((t, i) => `${i + 1}. ${t}`).join("\n");
       } else if (format === JoinFormat.PyArr) {
         joinedText = JSON.stringify(allTexts);
       } else {
-        joinedText = allTexts[0] || '';
+        joinedText = allTexts[0] || "";
       }
-  
+
       return {
         type: "join",
         output: {
           text: joinedText,
           metadata: {},
-          llm: undefined
+          llm: undefined,
         },
         nodeId: node.id,
         metadata: {
@@ -277,7 +421,7 @@ export class ColoredFlowExecutor {
           preservedMetadata: {},
           vars: [],
           metavars: [],
-          numLLMs: 0
+          numLLMs: 0,
         },
       };
     } catch (error) {
@@ -317,6 +461,9 @@ export class ColoredFlowExecutor {
       if (sourceResult?.output) {
         variables[edge.targetHandle] = sourceResult.output;
       }
+    }
+    if (!node.data.splitFormat) {
+      throw new Error(`No code provided for ${node.type} node`);
     }
 
     try {
@@ -409,6 +556,10 @@ export class ColoredFlowExecutor {
     try {
       // Pass ragData through variables to maintain the structure queryRAG expects
       variables.__ragData = ragData;
+
+      if (!node.data.prompt) {
+        throw new Error(`No prompt provided for ${node.type} node`);
+      }
 
       const result = await promptService.executePromptNode(
         node.data.prompt,

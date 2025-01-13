@@ -186,7 +186,6 @@ const JoinNode: React.FC<JoinNodeProps> = ({ data, id }) => {
     [],
   );
 
-
   // For an info pop-up that previews all the joined inputs
   const [infoModalOpened, { open: openInfoModal, close: closeInfoModal }] =
     useDisclosure(false);
