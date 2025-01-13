@@ -37,6 +37,8 @@
 // Currently coloredFlowExecutor wont handle parallel flows. Plus its an experimental feature
 import { Dict } from "../backend/typing";
 import { PromptExecutionService } from "./PromptExecutionService";
+import { SplitNodeExecutionService } from "./SplitNodeExecutionService";
+import { JoinFormat } from "./../JoinNode";
 
 export interface Edge {
   id: string;
@@ -162,12 +164,19 @@ export class ColoredFlowExecutor {
       // };
 
       case "uploadfilefields":
-      // For file fields, we want to pass the file paths through
-      return {
-        type: "uploadfilefields",
-        output: node.data.fields || {},
-        nodeId: node.id,
-      };
+        // For file fields, we want to pass the file paths through
+        return {
+          type: "uploadfilefields",
+          output: node.data.fields || {},
+          nodeId: node.id,
+        };
+
+      case "split":
+        return await this.executeSplitNode(node, context);
+
+      case "join":
+      case "joinNode":
+        return await this.executeJoinNode(node, context);
 
       case "prompt":
       case "promptNode":
@@ -203,50 +212,188 @@ export class ColoredFlowExecutor {
     return executionContext;
   }
 
+  private async executeJoinNode(
+    node: Node,
+    context: Map<string, any>,
+  ): Promise<any> {
+    console.log("executing join node");
+  
+    const incomingColoredEdges = Array.from(this.coloredEdges.values())
+      .flat()
+      .filter((edge) => edge.target === node.id);
+  
+    // Use default format if none specified
+    const format = node.data?.format || node.data?.joinFormat || JoinFormat.NumList;
+  
+    // Create variables dict for input processing
+    const variables: Dict<any> = {};
+  
+    // Process incoming edges and collect input data
+    for (const edge of incomingColoredEdges) {
+      const sourceResult = context.get(edge.source);
+      if (sourceResult?.output) {
+        // Convert object values to array of strings
+        if (typeof sourceResult.output === 'object' && !Array.isArray(sourceResult.output)) {
+          const texts = Object.values(sourceResult.output).map((val: unknown) => String(val));
+          variables[edge.targetHandle] = texts;
+        } else {
+          variables[edge.targetHandle] = Array.isArray(sourceResult.output) 
+            ? sourceResult.output.map((val: unknown) => String(val))
+            : [String(sourceResult.output)];
+        }
+      }
+    }
+  
+    try {
+      // Get all texts to join
+      const allTexts = Object.values(variables).flat();
+      
+      // Join texts using the joinTexts function logic
+      let joinedText = '';
+      if (format === JoinFormat.DubNewLine || format === JoinFormat.NewLine) {
+        joinedText = allTexts.join(format);
+      } else if (format === JoinFormat.DashedList) {
+        joinedText = allTexts.map(t => "- " + t).join("\n");
+      } else if (format === JoinFormat.NumList) {
+        joinedText = allTexts.map((t, i) => `${i + 1}. ${t}`).join("\n");
+      } else if (format === JoinFormat.PyArr) {
+        joinedText = JSON.stringify(allTexts);
+      } else {
+        joinedText = allTexts[0] || '';
+      }
+  
+      return {
+        type: "join",
+        output: {
+          text: joinedText,
+          metadata: {},
+          llm: undefined
+        },
+        nodeId: node.id,
+        metadata: {
+          joinFormat: format,
+          groupByVar: node.data.groupByVar || "A",
+          groupByLLM: node.data.groupByLLM || "within",
+          preservedMetadata: {},
+          vars: [],
+          metavars: [],
+          numLLMs: 0
+        },
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to execute join node: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  private async executeSplitNode(
+    node: Node,
+    context: Map<string, any>,
+  ): Promise<any> {
+    console.log("executing split node");
+    console.log(`Full context details:`, context);
+
+    // Get all colored edges targeting this node
+    const incomingColoredEdges = Array.from(this.coloredEdges.values())
+      .flat()
+      .filter((edge) => edge.target === node.id);
+
+    // Validate split format exists
+    if (!node.data?.splitFormat) {
+      throw new Error("Split format not specified in node configuration");
+    }
+
+    // Get all nodes from the context
+    const allNodes = Array.from(this.nodes.values());
+
+    // Create variables dict for input processing
+    const variables: Dict<any> = {};
+
+    // Process incoming edges and collect input data
+    for (const edge of incomingColoredEdges) {
+      const sourceResult = context.get(edge.source);
+      if (sourceResult?.output) {
+        variables[edge.targetHandle] = sourceResult.output;
+      }
+    }
+
+    try {
+      const splitService = new SplitNodeExecutionService(node.id);
+      const result = await splitService.executeSplitNode(
+        node.data.splitFormat,
+        variables,
+        incomingColoredEdges,
+        allNodes,
+      );
+
+      // Return in format matching UI for consistency
+      return {
+        type: "split",
+        output: result.splitResults,
+        nodeId: node.id,
+        metadata: {
+          splitFormat: node.data.splitFormat,
+          preservedMetadata: result.preservedMetadata,
+        },
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes("format")) {
+          throw new Error(`Split format error: ${error.message}`);
+        } else if (error.message.includes("input")) {
+          throw new Error(`Split input error: ${error.message}`);
+        }
+        throw new Error(`Failed to execute split node: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
   private async executePromptNode(
     node: Node,
     context: Map<string, any>,
   ): Promise<any> {
     console.log("executing prompt node");
     console.log(`Full context details:`, context);
-  
+
     // Get all edges targeting this node
     const incomingColoredEdges = Array.from(this.coloredEdges.values())
       .flat()
       .filter((edge) => edge.target === node.id);
-  
+
     // Get all nodes from the context
     const allNodes = Array.from(this.nodes.values());
-  
+
     // Create variables dict for backward compatibility
     const variables: Dict<any> = {};
-    
+
     // Prepare RAG data structure similar to PromptNode.tsx
     const ragData: any = {
       p_folder: process.env.P_FOLDER || "",
       i_folder: process.env.I_FOLDER || "",
       query: {},
-      uid: []
+      uid: [],
     };
-  
+
     for (const edge of incomingColoredEdges) {
       const sourceResult = context.get(edge.source);
       if (sourceResult?.output) {
-        if (edge.targetHandle === 'rag_knowledge_base') {
+        if (edge.targetHandle === "rag_knowledge_base") {
           // Handle RAG data similar to PromptNode.tsx lines 1191-1208
           const fileData = sourceResult.output;
           Object.values(fileData).forEach((filePath: unknown) => {
             try {
               // Extract UID from file path following the same pattern as PromptNode
-              if (typeof filePath === 'string') {
+              if (typeof filePath === "string") {
                 const uid = filePath.split("/")[3].split("-")[1];
-                const pathParts = filePath.split('/');
-                console.log(`File Path parts are: ${pathParts}`)
-                ragData.i_folder = pathParts[1]
-                ragData.p_folder = pathParts[0]
+                const pathParts = filePath.split("/");
+                console.log(`File Path parts are: ${pathParts}`);
+                ragData.i_folder = pathParts[1];
+                ragData.p_folder = pathParts[0];
                 ragData.uid.push(uid);
               }
-          
             } catch (err) {
               console.error("Error extracting UID from file path:", err);
             }
@@ -256,13 +403,13 @@ export class ColoredFlowExecutor {
         variables[edge.targetHandle] = sourceResult.output;
       }
     }
-  
+
     const promptService = new PromptExecutionService(node.id);
-  
+
     try {
       // Pass ragData through variables to maintain the structure queryRAG expects
       variables.__ragData = ragData;
-      
+
       const result = await promptService.executePromptNode(
         node.data.prompt,
         node.data.llms || [],
@@ -271,9 +418,9 @@ export class ColoredFlowExecutor {
         incomingColoredEdges,
         allNodes,
         node.data.apiKeys,
-        undefined  // onProgressChange is optional
+        undefined, // onProgressChange is optional
       );
-  
+
       return {
         type: "prompt",
         output: result.responses,
@@ -283,27 +430,6 @@ export class ColoredFlowExecutor {
     } catch (error) {
       const message = (error as Error).message;
       throw new Error(`Failed to execute prompt node: ${message}`);
-    }
-  }
-
- 
-  private async executeColoredFlow(
-    currentNodeId: string,
-    executionContext: Map<string, any>,
-    visited: Set<string>,
-  ): Promise<void> {
-    if (visited.has(currentNodeId)) return;
-
-    console.log(`Executing colored flow node ${currentNodeId}.`);
-    await this.executeNode(currentNodeId, executionContext);
-    visited.add(currentNodeId);
-
-    const coloredOutgoingEdges = this.coloredEdges.get(currentNodeId) || [];
-    for (const edge of coloredOutgoingEdges) {
-      console.log(
-        `Following colored edge from ${currentNodeId} to ${edge.target}.`,
-      );
-      await this.executeColoredFlow(edge.target, executionContext, visited);
     }
   }
 
@@ -359,89 +485,6 @@ export class ColoredFlowExecutor {
     }
 
     return levelGroups;
-  }
-
-  //   # single flow working; not for parallel flow
-  //   private determineExecutionOrder(): string[] {
-  //     const connectedNodes = this.getConnectedNodes();
-  //     const inDegree = new Map<string, number>();
-  //     const zeroInDegreeQueue: string[] = [];
-  //     const sortedOrder: string[] = [];
-
-  //     // Initialize inDegree map only for connected nodes
-  //     connectedNodes.forEach((nodeId) => {
-  //       inDegree.set(nodeId, 0);
-  //     });
-
-  //     // Calculate inDegree for each connected node
-  //     this.coloredEdges.forEach((edges) => {
-  //       edges.forEach((edge) => {
-  //         if (connectedNodes.has(edge.target)) {
-  //           inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
-  //         }
-  //       });
-  //     });
-
-  //     // Find entry points (nodes with no incoming colored edges)
-  //     inDegree.forEach((degree, nodeId) => {
-  //       if (degree === 0 && this.coloredEdges.has(nodeId)) {
-  //         zeroInDegreeQueue.push(nodeId);
-  //       }
-  //     });
-
-  //     // If no entry points found among nodes with outgoing edges,
-  //     // look for isolated entry nodes
-  //     if (zeroInDegreeQueue.length === 0) {
-  //       connectedNodes.forEach((nodeId) => {
-  //         if (inDegree.get(nodeId) === 0) {
-  //           zeroInDegreeQueue.push(nodeId);
-  //         }
-  //       });
-  //     }
-
-  //     // Process nodes in topological order
-  //     while (zeroInDegreeQueue.length > 0) {
-  //       const nodeId = zeroInDegreeQueue.shift()!;
-  //       sortedOrder.push(nodeId);
-
-  //       const edges = this.coloredEdges.get(nodeId) || [];
-  //       edges.forEach((edge) => {
-  //         if (connectedNodes.has(edge.target)) {
-  //           const newDegree = inDegree.get(edge.target)! - 1;
-  //           inDegree.set(edge.target, newDegree);
-  //           if (newDegree === 0) {
-  //             zeroInDegreeQueue.push(edge.target);
-  //           }
-  //         }
-  //       });
-  //     }
-
-  //     // Validate that all connected nodes are included
-  //     if (sortedOrder.length !== connectedNodes.size) {
-  //       throw new Error("Invalid graph structure: not all nodes can be reached");
-  //     }
-
-  //     return sortedOrder;
-  //   }
-
-  private async executeRegularFlow(
-    currentNodeId: string,
-    executionContext: Map<string, any>,
-    visited: Set<string>,
-  ): Promise<void> {
-    if (visited.has(currentNodeId)) return;
-
-    console.log(`Executing regular flow node ${currentNodeId}.`);
-    await this.executeNode(currentNodeId, executionContext);
-    visited.add(currentNodeId);
-
-    const regularOutgoingEdges = this.regularEdges.get(currentNodeId) || [];
-    for (const edge of regularOutgoingEdges) {
-      console.log(
-        `Following regular edge from ${currentNodeId} to ${edge.target}.`,
-      );
-      await this.executeRegularFlow(edge.target, executionContext, visited);
-    }
   }
 
   private getConnectedNodes(): Set<string> {

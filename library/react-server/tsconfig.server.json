@@ -2,8 +2,9 @@
   "compilerOptions": {
     "target": "es2021",
     "lib": ["es2021", "dom", "dom.iterable"],
-    "module": "commonjs",
+    "module": "CommonJS",
     "outDir": "./dist",
+    "noEmit": false,
     "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
@@ -16,6 +17,17 @@
       "*": ["./src/types/*"]
     }
   },
-  "include": ["src/server.ts", "src/backend/**/*", "src/services/**/*"],
-  "exclude": ["node_modules", "src/**/*.tsx", "src/**/*.jsx"]
+  "include": [
+    "src/server.ts",
+    "src/backend/**/*",
+    "src/services/**/*",
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "src/**/*.tsx",
+    "src/**/*.jsx",
+    "src/**/*.css",
+    "src/**/*.scss"
+  ]
 }
