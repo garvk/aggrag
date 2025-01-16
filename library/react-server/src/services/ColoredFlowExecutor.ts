@@ -37,6 +37,8 @@
 // Currently coloredFlowExecutor wont handle parallel flows. Plus its an experimental feature
 import { Dict } from "../backend/typing";
 import { PromptExecutionService } from "./PromptExecutionService";
+import { SplitNodeExecutionService } from "./SplitNodeExecutionService";
+import { JoinFormat } from "./../JoinNode";
 import { executeJsInNode } from "./CodeExecutionService";
 
 export interface Edge {
@@ -170,6 +172,13 @@ export class ColoredFlowExecutor {
           nodeId: node.id,
         };
 
+      case "split":
+        return await this.executeSplitNode(node, context);
+
+      case "join":
+      case "joinNode":
+        return await this.executeJoinNode(node, context);
+
       case "evaluator":
       case "processor":
         return await this.executeJavaScriptNode(node, context);
@@ -206,6 +215,145 @@ export class ColoredFlowExecutor {
 
     console.log("Execution of flow completed.");
     return executionContext;
+  }
+
+  private async executeJoinNode(
+    node: Node,
+    context: Map<string, any>,
+  ): Promise<any> {
+    console.log("executing join node");
+  
+    const incomingColoredEdges = Array.from(this.coloredEdges.values())
+      .flat()
+      .filter((edge) => edge.target === node.id);
+  
+    // Use default format if none specified
+    const format = node.data?.format || node.data?.joinFormat || JoinFormat.NumList;
+  
+    // Create variables dict for input processing
+    const variables: Dict<any> = {};
+  
+    // Process incoming edges and collect input data
+    for (const edge of incomingColoredEdges) {
+      const sourceResult = context.get(edge.source);
+      if (sourceResult?.output) {
+        // Convert object values to array of strings
+        if (typeof sourceResult.output === 'object' && !Array.isArray(sourceResult.output)) {
+          const texts = Object.values(sourceResult.output).map((val: unknown) => String(val));
+          variables[edge.targetHandle] = texts;
+        } else {
+          variables[edge.targetHandle] = Array.isArray(sourceResult.output) 
+            ? sourceResult.output.map((val: unknown) => String(val))
+            : [String(sourceResult.output)];
+        }
+      }
+    }
+  
+    try {
+      // Get all texts to join
+      const allTexts = Object.values(variables).flat();
+      
+      // Join texts using the joinTexts function logic
+      let joinedText = '';
+      if (format === JoinFormat.DubNewLine || format === JoinFormat.NewLine) {
+        joinedText = allTexts.join(format);
+      } else if (format === JoinFormat.DashedList) {
+        joinedText = allTexts.map(t => "- " + t).join("\n");
+      } else if (format === JoinFormat.NumList) {
+        joinedText = allTexts.map((t, i) => `${i + 1}. ${t}`).join("\n");
+      } else if (format === JoinFormat.PyArr) {
+        joinedText = JSON.stringify(allTexts);
+      } else {
+        joinedText = allTexts[0] || '';
+      }
+  
+      return {
+        type: "join",
+        output: {
+          text: joinedText,
+          metadata: {},
+          llm: undefined
+        },
+        nodeId: node.id,
+        metadata: {
+          joinFormat: format,
+          groupByVar: node.data.groupByVar || "A",
+          groupByLLM: node.data.groupByLLM || "within",
+          preservedMetadata: {},
+          vars: [],
+          metavars: [],
+          numLLMs: 0
+        },
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to execute join node: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  private async executeSplitNode(
+    node: Node,
+    context: Map<string, any>,
+  ): Promise<any> {
+    console.log("executing split node");
+    console.log(`Full context details:`, context);
+
+    // Get all colored edges targeting this node
+    const incomingColoredEdges = Array.from(this.coloredEdges.values())
+      .flat()
+      .filter((edge) => edge.target === node.id);
+
+    // Validate split format exists
+    if (!node.data?.splitFormat) {
+      throw new Error("Split format not specified in node configuration");
+    }
+
+    // Get all nodes from the context
+    const allNodes = Array.from(this.nodes.values());
+
+    // Create variables dict for input processing
+    const variables: Dict<any> = {};
+
+    // Process incoming edges and collect input data
+    for (const edge of incomingColoredEdges) {
+      const sourceResult = context.get(edge.source);
+      if (sourceResult?.output) {
+        variables[edge.targetHandle] = sourceResult.output;
+      }
+    }
+
+    try {
+      const splitService = new SplitNodeExecutionService(node.id);
+      const result = await splitService.executeSplitNode(
+        node.data.splitFormat,
+        variables,
+        incomingColoredEdges,
+        allNodes,
+      );
+
+      // Return in format matching UI for consistency
+      return {
+        type: "split",
+        output: result.splitResults,
+        nodeId: node.id,
+        metadata: {
+          splitFormat: node.data.splitFormat,
+          preservedMetadata: result.preservedMetadata,
+        },
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes("format")) {
+          throw new Error(`Split format error: ${error.message}`);
+        } else if (error.message.includes("input")) {
+          throw new Error(`Split input error: ${error.message}`);
+        }
+        throw new Error(`Failed to execute split node: ${error.message}`);
+      }
+      throw error;
+    }
   }
 
   private async executePromptNode(
