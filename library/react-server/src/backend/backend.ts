@@ -398,7 +398,7 @@ function check_typeof_vals(arr: Array<any>): MetricType {
   } else return val_type;
 }
 
-async function run_over_responses(
+export async function run_over_responses(
   process_func: (resp: ResponseInfo) => any,
   responses: LLMResponse[],
   process_type: "evaluator" | "processor",
