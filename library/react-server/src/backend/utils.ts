@@ -166,6 +166,7 @@ function get_environ(key: string): string | undefined {
 }
 
 let OPENAI_API_KEY = get_environ("OPENAI_API_KEY");
+console.log("Initial OPENAI_API_KEY:", OPENAI_API_KEY);
 let OPENAI_BASE_URL = get_environ("OPENAI_BASE_URL");
 let ANTHROPIC_API_KEY = get_environ("ANTHROPIC_API_KEY");
 let GOOGLE_PALM_API_KEY = get_environ("PALM_API_KEY");
@@ -190,6 +191,12 @@ export function set_api_keys(api_keys: Dict<string>): void {
         api_keys[name].trim().length > 0) ||
       name === "OpenAI_BaseURL"
     );
+  }
+
+  // Add this in set_api_keys function after line 194
+  if (key_is_present("OpenAI")) {
+    console.log("Setting OpenAI key:", api_keys.OpenAI);
+    OPENAI_API_KEY = api_keys.OpenAI;
   }
   if (key_is_present("OpenAI")) OPENAI_API_KEY = api_keys.OpenAI;
   if (key_is_present("OpenAI_BaseURL"))
@@ -262,7 +269,7 @@ export async function call_chatgpt(
     throw new Error(
       "Could not find an OpenAI API key. Double-check that your API key is set in Settings or in your local environment.",
     );
-
+  console.log("Check OPENAI BASE URL and KEY", OPENAI_API_KEY);
   console.log(OPENAI_BASE_URL);
 
   const configuration = new OpenAIConfig({

@@ -7,3 +7,5 @@ Items to do:
 2. Before Run Flow API is called we should have to run 'Validate Flow API' that will validate stuff like:
     a. Nodes to be executed and their order of execution
     b. Generate a (curl) request with 'placeholder' values of the user inputs needed for the flow
+
+3. Along with the Run Flow, Validate Flow drop down, we should Scheduler, which schedules the Running of the flow according to a schedule chosen such as daily, etc. 
